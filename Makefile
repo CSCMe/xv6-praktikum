@@ -1,11 +1,12 @@
 K=kernel
 U=user
+O=own
 
 OBJS = \
   $K/entry.o \
   $K/start.o \
   $K/console.o \
-  $K/printf.o \
+  $K/printk.o \
   $K/uart.o \
   $K/kalloc.o \
   $K/spinlock.o \
@@ -18,6 +19,7 @@ OBJS = \
   $K/trap.o \
   $K/syscall.o \
   $K/sysproc.o \
+  $K/sysown.o \
   $K/bio.o \
   $K/fs.o \
   $K/log.o \
@@ -153,6 +155,7 @@ UPROGS=\
 	$U/_cxxtest\
 	$U/_my_malloc_test\
 	$U/_malloc_test_cxx\
+	$U/_test_printf\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

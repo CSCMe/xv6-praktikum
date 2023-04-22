@@ -14,6 +14,7 @@ extern "C" {
 #include "kernel/file.h"
 #include "kernel/proc.h"
 #include "kernel/stat.h"
+#include "kernel/printk.h"
 
 
 // bio.c
@@ -83,10 +84,6 @@ void            pipeclose(struct pipe*, int);
 int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
-// printf.c
-void            printf(char*, ...);
-void            panic(char*) __attribute__((noreturn));
-void            printfinit(void);
 
 // proc.c
 int             cpuid(void);
