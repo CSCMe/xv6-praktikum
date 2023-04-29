@@ -162,6 +162,8 @@ UPROGS=\
 	$U/_hello_kernel\
 	$U/_test_printf\
 	$O/_test_own\
+	$O/_test_nmalloc\
+	$O/_nmalloc\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

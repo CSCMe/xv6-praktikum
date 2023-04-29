@@ -45,6 +45,7 @@ free(void *ap)
 static Header*
 morecore(uint nu)
 {
+  
   char *p;
   Header *hp;
 
@@ -56,6 +57,7 @@ morecore(uint nu)
   hp = (Header*)p;
   hp->s.size = nu;
   free((void*)(hp + 1));
+  printf("MORECORE: size (byte):%x ptr:%p\n", hp->s.size * 16, hp->s.ptr);
   return freep;
 }
 
@@ -67,6 +69,7 @@ malloc(uint nbytes)
   Header *p, *prevp;
   uint nunits;
 
+  // Minimum size is 2, after that it increases every 16 byte
   nunits = (nbytes + sizeof(Header) - 1)/sizeof(Header) + 1;
   if((prevp = freep) == 0){
     base.s.ptr = freep = prevp = &base;
@@ -77,14 +80,17 @@ malloc(uint nbytes)
       if(p->s.size == nunits)
         prevp->s.ptr = p->s.ptr;
       else {
-        p->s.size -= nunits;
-        p += p->s.size;
-        p->s.size = nunits;
+        p->s.size -= nunits; //ps (prevp->s.ptr) size is decreased by nunits
+        p += p->s.size;      //p itself is incremented by the allocated size, meaning p is now just for the free region, prevp->s.ptr describes the free region, not prevp
+        p->s.size = nunits;  //sets size of new p
       }
       freep = prevp;
-      return (void*)(p + 1);
+      printf("MALLOC: pointer pos:%p, region size (byte):%d\n", p, p->s.size * 16);
+      printf("freeUpdate: pointer pos:%p, nextFree: %p ,region size (byte):%d\n", prevp->s.ptr, prevp->s.ptr->s.ptr,prevp->s.ptr->s.size * 16);
+      return (void*)(p + 1); //Since p is 16 byte long, this always returns an address 16 bytes after p
     }
-    if(p == freep)
+    if(p == freep) // Last prevp->s.ptr is pointing back to freeptr, basically the loop end condition
+    //Meaning this will loop until the last entry in the free list has been reached
       if((p = morecore(nunits)) == 0)
         return 0;
   }
