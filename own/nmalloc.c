@@ -5,6 +5,7 @@
 #define NULL 0
 #define BLOCKSIZE sizeof(Header)
 //#define DEBUG_BMALLOC
+//#define DEBUG_BFREE
 
 typedef enum __dir{
     NONE = 0,
@@ -41,6 +42,7 @@ typedef struct __header {
 // Prints all the information needed to debug a particular header
 #define DEBUGHEADER(header) printf("ptr:%p fl:%b, fr:%b, lvl:%b, dir:%b, allocDirs:%b\n", header, header->freeLeft, header->freeRight, header->level, header->dirToParent, header->allocDirs)
 
+Header* base;
 Header* anchor = NULL;
 
 /**
@@ -89,18 +91,74 @@ void updateFreeFlags(Header* uHeader){
     }
 }
 
+void mergeRegion(Header* toMerge) {
+    // Is the entire region free?
+    #ifdef DEBUG_BFREE
+        printf("BFREE-Merging: ");
+        DEBUGHEADER(toMerge);
+    #endif
+    while (toMerge->freeLeft == toMerge->freeRight && toMerge->freeLeft == toMerge->level) {
+        #ifdef DEBUG_BFREE
+            printf("BFREE-Merging-Cont: ");
+            DEBUGHEADER(toMerge);
+        #endif
+        if (toMerge->dirToParent == LEFT) {
+            toMerge = toMerge - (toMerge->level << 1);
+            toMerge->freeRight = toMerge->level;
+        } else {
+            toMerge = toMerge + (toMerge->level << 1);
+            toMerge->freeLeft = toMerge->freeRight;
+        }
+    }
+    updateFreeFlags(toMerge);
+}
+
 /**
  * Frees memory allocated with bmalloc
- * And merges sides if both are free
- * TBI
+ * And merges sides if both are free (TODO)
 */
-uint32 bfree(void* address) {
-    uint32 leftLevel = anchor->level;
-    (void) leftLevel;
-    if (address > 0) {
+void bfree(void* address) {
+    // Check the left side first
+    // Header potentially responsible for the address
+    Header* respHeader = ((Header*) address) - 1;
 
+    if (address == NULL || respHeader < (base - 1)) {
+        return;
     }
-    return 0;
+    
+    // Are we to the right of the left header?
+    if (respHeader->allocDirs & RIGHT) {
+        // Congrats, we are done.
+        // Merging after the branch
+        respHeader->allocDirs ^= RIGHT;
+        respHeader->freeRight = respHeader->level;
+        #ifdef DEBUG_BFREE
+        printf("BFREE: leftH: ");
+        DEBUGHEADER(respHeader);
+        #endif
+    } else {
+        // Are we at the very left? In that case our left side is (base - 1), so we go to anchor and left
+        // Else we go to the right of the header on our left
+        DEBUGHEADER(respHeader);
+        DEBUGHEADER((base - 1));
+        respHeader = respHeader != (base -1) ? respHeader + respHeader->level : anchor;
+        DEBUGHEADER(respHeader);
+        while(!(respHeader->allocDirs & LEFT)) {
+            // Go down one level to the left
+            #ifdef DEBUG_BFREE
+
+            #endif
+            respHeader = respHeader - respHeader->level;
+        }
+        // Congrats! We found our header.
+        respHeader->allocDirs ^= LEFT;
+        respHeader->freeLeft = respHeader->level;
+        #ifdef DEBUG_BFREE
+            printf("BFREE: rightH: ");
+            DEBUGHEADER(respHeader);
+        #endif
+    }
+    mergeRegion(respHeader);
 }
 
 /**
@@ -260,37 +318,47 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
     return cLevel;
 }
 
-void* binit(uint32 requiredLevel) {
+/**
+ * Initializes anchor and base
+*/
+void binit(uint32 requiredLevel) {
+    // Here to fix alignment to Block size
+    uint64 alignFix = (uint64)sbrk(0) % BLOCKSIZE;
+    // Amount of bytes requested from sbrk
     uint64 allocSize = ((requiredLevel << 2) - 1) * BLOCKSIZE;
-    uint64 rVal = (uint64) sbrk(allocSize);
+    // Value returned by sbrk. Address of previous memory area end.
+    uint64 rVal = (uint64) sbrk(allocSize + alignFix);
     #ifdef DEBUG_BMALLOC
     printf("BMALLOC-binit: %p\n", rVal);
     #endif
     if (rVal == -1) {
         printf("BMALLOC-CRITICAL-ERROR: NO ANCHOR");
-        return NULL;
+        return;
     }
-    Header* nAnchor = (Header*) ((rVal + allocSize) - ((requiredLevel << 2) * BLOCKSIZE));
+    anchor = (Header*) ((rVal + allocSize) - ((requiredLevel << 1) * BLOCKSIZE));
     #ifdef DEBUG_BMALLOC
-    printf("BMALLOC-binit: New Anchor at:%p\n", nAnchor);
+    printf("BMALLOC-binit: New Anchor at:%p\n", anchor);
     #endif
-    nAnchor->freeLeft    = requiredLevel; 
-    nAnchor->freeRight   = requiredLevel;
-    nAnchor->level       = requiredLevel;
-    nAnchor->dirToParent = NONE; 
-    nAnchor->allocDirs   = NONE;
-    return nAnchor;
+    anchor->freeLeft    = requiredLevel; 
+    anchor->freeRight   = requiredLevel;
+    anchor->level       = requiredLevel;
+    anchor->dirToParent = NONE; 
+    anchor->allocDirs   = NONE;
+    base = (Header*) rVal;
 }
 /**
  * Buddy malloc
 */
 void* bmalloc(uint32 nBytes) {
-    uint32 requiredLevel = only_fs(nBytes / BLOCKSIZE);
+    if(nBytes == 0) {
+        return NULL;
+    }
 
+    uint32 requiredLevel = only_fs(nBytes / BLOCKSIZE);
     // There's no anchor yet.
     // We can rebuild him, we have the technology
     if(anchor == NULL) { 
-        anchor = binit(requiredLevel);
+        binit(requiredLevel);
         if (anchor == NULL) {
             printf("BMALLOC-CRITICAL-ERROR: NO ANCHOR");
             return NULL;
@@ -345,6 +413,8 @@ void* bmalloc(uint32 nBytes) {
 void main(int argc, char** argv) {
 
     bmalloc(4096 * BLOCKSIZE);
-    bmalloc(1);
+    
+    void* arr = bmalloc(1);
+    bfree(arr);
     DEBUGHEADER(anchor);
 }
