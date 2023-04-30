@@ -40,7 +40,7 @@ typedef struct __header {
 } Header;
 
 // Prints all the information needed to debug a particular header
-#define DEBUGHEADER(header) printf("ptr:%p fl:%b, fr:%b, lvl:%b, dir:%b, allocDirs:%b\n", header, header->freeLeft, header->freeRight, header->level, header->dirToParent, header->allocDirs)
+#define DEBUGHEADER(header) printf("ptr:%p fl:%b, fr:%b, lvl:%b, dir:%b, allocDirs:%b\n", (header), (header)->freeLeft, (header)->freeRight, (header)->level, (header)->dirToParent, (header)->allocDirs)
 
 Header* base;
 Header* anchor = NULL;
@@ -117,7 +117,7 @@ void mergeRegion(Header* toMerge) {
  * Frees memory allocated with bmalloc
  * And merges sides if both are free (TODO)
 */
-void bfree(void* address) {
+void free(void* address) {
     // Check the left side first
     // Header potentially responsible for the address
     Header* respHeader = ((Header*) address) - 1;
@@ -139,10 +139,14 @@ void bfree(void* address) {
     } else {
         // Are we at the very left? In that case our left side is (base - 1), so we go to anchor and left
         // Else we go to the right of the header on our left
+        #ifdef DEBUG_BFREE
         DEBUGHEADER(respHeader);
         DEBUGHEADER((base - 1));
+        #endif
         respHeader = respHeader != (base -1) ? respHeader + respHeader->level : anchor;
+        #ifdef DEBUG_BFREE
         DEBUGHEADER(respHeader);
+        #endif
         while(!(respHeader->allocDirs & LEFT)) {
             // Go down one level to the left
             #ifdef DEBUG_BFREE
@@ -349,7 +353,7 @@ void binit(uint32 requiredLevel) {
 /**
  * Buddy malloc
 */
-void* bmalloc(uint32 nBytes) {
+void* malloc(uint32 nBytes) {
     if(nBytes == 0) {
         return NULL;
     }
@@ -405,16 +409,4 @@ void* bmalloc(uint32 nBytes) {
     // Used to correctly set bits at every level again.
     
     return mallocSpace;
-}
-
-/**
- * For testing and setup
-*/
-void main(int argc, char** argv) {
-
-    bmalloc(4096 * BLOCKSIZE);
-    
-    void* arr = bmalloc(1);
-    bfree(arr);
-    DEBUGHEADER(anchor);
 }

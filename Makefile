@@ -109,7 +109,7 @@ tags: $(OBJS) _init
 	etags *.S *.c
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o $U/bmalloc.o $U/mmap-mock.o $U/futex.o
-ULIB += $U/user.o
+ULIB += $U/user.o $O/nmalloc.o
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
@@ -163,7 +163,6 @@ UPROGS=\
 	$U/_test_printf\
 	$O/_test_own\
 	$O/_test_nmalloc\
-	$O/_nmalloc\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
