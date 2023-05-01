@@ -13,13 +13,24 @@ union header {
 typedef union header Header;
 
 void main(int argc, char ** argv) {
-  sbrk(1);
+  sbrk(0b1000);
+  char* arr[39] = {0};
+  for (int i = 0; i < 39; i++) {
+    arr[i] = malloc(2<<i);
+    printf("%p\n", arr[i]);
+  }
+  for (int i = 0; i < 39; i++) {
+    free(arr[i]);
+  }
+  printf("Break===========================================================\n");
+  // now we should have an empty anchor again
+  char* aah = malloc(1);
   // Grow DS once
   for (int i = 0; i < 4; i++) {
     malloc(1 * 16);
   }
-  printf("Break===========================================================\n");
   for (int i = 0; i < 4; i++) {
     malloc(8 * 16);
   }
+  free(aah);
 }
