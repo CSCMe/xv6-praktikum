@@ -2,11 +2,13 @@
 #include "user/user.h"
 #include "kernel/param.h"
 
+// Despite the numerous mentions of "Block", this is not Block allocation
+
 #define NULL 0
 #define BLOCKSIZE sizeof(Header)
 #define BLOCKALIGN (BLOCKSIZE - 1)
-//#define DEBUG_BMALLOC
-//#define DEBUG_BFREE
+//#define DEBUG_BDMALLOC
+//#define DEBUG_BDFREE
 //#define DEBUG_ANCHOR
 //#define DEBUG_TRAVERSAL
 //#define DEBUG_GROWMEM
@@ -66,7 +68,7 @@ uint32 only_fs(uint32 num) {
  * uHeader: previously updated Header
 */
 void updateFreeFlags(Header* uHeader){
-    #ifdef DEBUG_BMALLOC
+    #ifdef DEBUG_BDMALLOC
     printf("Start flag update\n");
     #endif
     // uHeader is never anchor, because there is no parent of anchor
@@ -86,7 +88,7 @@ void updateFreeFlags(Header* uHeader){
             parHeader->freeRight = nFlag;
         }
         // Debugging stuff
-        #ifdef DEBUG_BMALLOC
+        #ifdef DEBUG_BDMALLOC
         printf("uHeader: ");
         DEBUGHEADER(uHeader);
         printf("parHeader: ");
@@ -99,13 +101,13 @@ void updateFreeFlags(Header* uHeader){
 
 void mergeRegion(Header* toMerge) {
     // Is the entire region free?
-    #ifdef DEBUG_BFREE
-        printf("BFREE-Merging: ");
+    #ifdef DEBUG_BDFREE
+        printf("BDFREE-Merging: ");
         DEBUGHEADER(toMerge);
     #endif
     while (toMerge != anchor && toMerge->freeLeft == toMerge->freeRight && toMerge->freeLeft == toMerge->level) {
-        #ifdef DEBUG_BFREE
-            printf("BFREE-Merging-Cont: ");
+        #ifdef DEBUG_BDFREE
+            printf("BDFREE-Merging-Cont: ");
             DEBUGHEADER(toMerge);
         #endif
         if (toMerge->dirToParent == LEFT) {
@@ -120,7 +122,7 @@ void mergeRegion(Header* toMerge) {
 }
 
 /**
- * Frees memory allocated with bmalloc
+ * Frees memory allocated with BDMALLOC
  * And merges sides if both are free (TODO)
 */
 void free(void* address) {
@@ -129,8 +131,8 @@ void free(void* address) {
     Header* respHeader = ((Header*) address) - 1;
 
     if (address == NULL || respHeader < (base - 1)) {
-        #ifdef DEBUG_BFREE
-        printf("BFREE-NOTFREED: anch:%p, base:%p, ptr:%p\n", anchor, base, address);
+        #ifdef DEBUG_BDFREE
+        printf("BDFREE-NOTFREED: anch:%p, base:%p, ptr:%p\n", anchor, base, address);
         #endif
         return;
     }
@@ -141,30 +143,30 @@ void free(void* address) {
         // Merging after the branch
         respHeader->allocDirs ^= RIGHT;
         respHeader->freeRight = respHeader->level;
-        #ifdef DEBUG_BFREE
-        printf("BFREE: leftH: ");
+        #ifdef DEBUG_BDFREE
+        printf("BDFREE: leftH: ");
         DEBUGHEADER(respHeader);
         #endif
     } else {
         // Are we at the very left? In that case our left side is (base - 1), so we go to anchor and left
         // Else we go to the right of the header on our left
-        #ifdef DEBUG_BFREE
-        printf("BFREE: respHeader:%p, base-1:%p\n", respHeader, base -1);
+        #ifdef DEBUG_BDFREE
+        printf("BDFREE: respHeader:%p, base-1:%p\n", respHeader, base -1);
         #endif
         respHeader = respHeader != (base - 1) ? respHeader + respHeader->level : anchor;
-        #ifdef DEBUG_BFREE
-        printf("BFREE: respHeader: ");
+        #ifdef DEBUG_BDFREE
+        printf("BDFREE: respHeader: ");
         DEBUGHEADER(respHeader);
         #endif
         while(!(respHeader->allocDirs & LEFT)) {
             // Go down one level to the left
-            #ifdef DEBUG_BFREE
-            printf("BFREE-searchLeft: cHeader: ");
+            #ifdef DEBUG_BDFREE
+            printf("BDFREE-searchLeft: cHeader: ");
             DEBUGHEADER(respHeader);
             #endif
             if (respHeader->level == 0) {
                 #ifdef DEBUG_ERRORS
-                printf("BFREE-NOTFREED-Left: NotFound\n");
+                printf("BDFREE-NOTFREED-Left: NotFound\n");
                 #endif
                 return;
             }
@@ -173,20 +175,20 @@ void free(void* address) {
         // Congrats! We found our header.
         respHeader->allocDirs ^= LEFT;
         respHeader->freeLeft = respHeader->level;
-        #ifdef DEBUG_BFREE
-            printf("BFREE: rightH: ");
+        #ifdef DEBUG_BDFREE
+            printf("BDFREE: rightH: ");
             DEBUGHEADER(respHeader);
         #endif
     }
     if (respHeader->level == 0) {
         #ifdef DEBUG_ERRORS
-        printf("BFREE-NOTFREED-Left: NotFound\n");
+        printf("BDFREE-NOTFREED-Left: NotFound\n");
         #endif
         return;
     }
     mergeRegion(respHeader);
     #ifdef DEBUG_ANCHOR
-    printf("BFREE-End: ");
+    printf("BDFREE-End: ");
     DEBUGHEADER(anchor);
     #endif
 }
@@ -279,7 +281,7 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
         nextBestLevel <<= 1;
     }
     #ifdef DEBUG_TRAVERSAL
-    printf("BMALLOC-TRAVERSAL-NBL: nbl: %b, req: %b\n", nextBestLevel, requiredLevel);
+    printf("BDMALLOC-TRAVERSAL-NBL: nbl: %b, req: %b\n", nextBestLevel, requiredLevel);
     #endif
     // We found the next best level:
     // Now we traverse the tree to this location
@@ -295,7 +297,7 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
     // Now we check if we can directly allocate here
     // or if we need to split
     #ifdef DEBUG_TRAVERSAL
-    printf("BMALLOC-TRAVERSAL-LON: req:%b, node: ",requiredLevel);
+    printf("BDMALLOC-TRAVERSAL-LON: req:%b, node: ",requiredLevel);
     DEBUGHEADER(uHeader);
     #endif
 
@@ -308,7 +310,7 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
             *rDir = RIGHT;
         } else {
             #ifdef DEBUG_ERRORS
-            printf("BMALLOC-TRAVERSAL-ERROR\n");
+            printf("BDMALLOC-TRAVERSAL-ERROR\n");
             #endif
         }
         return uHeader;
@@ -325,7 +327,7 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
             uHeader->dirToParent = LEFT;
             uHeader->allocDirs   = NONE;
             #ifdef DEBUG_TRAVERSAL
-            printf("BMALLOC-TRAVERSAL-RSplit: ");
+            printf("BDMALLOC-TRAVERSAL-RSplit: ");
             DEBUGHEADER(uHeader);
             #endif
         }
@@ -340,7 +342,7 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
             uHeader->dirToParent = RIGHT;
             uHeader->allocDirs   = NONE;
             #ifdef DEBUG_TRAVERSAL
-            printf("BMALLOC-TRAVERSAL-Splits: ");
+            printf("BDMALLOC-TRAVERSAL-Splits: ");
             DEBUGHEADER(uHeader);
             #endif
         }
@@ -369,11 +371,11 @@ void binit(uint32 requiredLevel) {
     // Value returned by sbrk. Address of previous memory area end.
     uint64 rVal = (uint64) sbrk(allocSize + alignFix);
     #if defined(DEBUG_GROWMEM) || defined(DEBUG_ANCHOR)
-    printf("BMALLOC-binit: rs:%p af:%x, blocks:%d, byte:%d\n", rVal, alignFix, allocSize / BLOCKSIZE, allocSize);
+    printf("BDMALLOC-binit: rs:%p af:%x, blocks:%d, byte:%d\n", rVal, alignFix, allocSize / BLOCKSIZE, allocSize);
     #endif
     if (rVal == -1) {
         #ifdef DEBUG_ERRORS
-        printf("BMALLOC-CRITICAL-ERROR: NO ANCHOR");
+        printf("BDMALLOC-CRITICAL-ERROR: NO ANCHOR");
         #endif
         return;
     }
@@ -385,7 +387,7 @@ void binit(uint32 requiredLevel) {
     anchor->allocDirs   = NONE;
     base = (Header*) (rVal + alignFix);
     #ifdef DEBUG_GROWMEM
-    printf("BMALLOC-binit: nAnchor:%p, base:%p\n", anchor, base);
+    printf("BDMALLOC-binit: nAnchor:%p, base:%p\n", anchor, base);
     DEBUGHEADER(anchor);
     #endif
 }
@@ -404,7 +406,7 @@ void* malloc(uint32 nBytes) {
         binit(requiredLevel);
         if (anchor == NULL) {
             #ifdef DEBUG_ERRORS
-            printf("BMALLOC-CRITICAL-ERROR: NO ANCHOR");
+            printf("BDMALLOC-CRITICAL-ERROR: NO ANCHOR");
             #endif
             return NULL;
         }
@@ -415,7 +417,7 @@ void* malloc(uint32 nBytes) {
         Header* nAnchor = bgrowmemory(requiredLevel);
         if (nAnchor == NULL) {
             #ifdef DEBUG_ERRORS
-            printf("BMALLOC-ALLOC-ERROR: Not enough free space\n");
+            printf("BDMALLOC-ALLOC-ERROR: Not enough free space\n");
             #endif
             return NULL;
         }
@@ -428,13 +430,13 @@ void* malloc(uint32 nBytes) {
     
     // Now we find a space. We can change the strategy. (But why would we)
     Header* foundSpace = traverseBestFit(requiredLevel, &allocDir);
-    // Address returned by bmalloc
+    // Address returned by BDMALLOC
     void* mallocSpace;
 
     // Calculate required address and set freeLeft and freeRight
     if (foundSpace == NULL) {
         #ifdef DEBUG_ERRORS
-        printf("BMALLOC-ALLOC-ERROR: traverseBestFit returned NULL\n");
+        printf("BDMALLOC-ALLOC-ERROR: traverseBestFit returned NULL\n");
         #endif
         return NULL;
     } else if (allocDir == RIGHT) {
@@ -445,7 +447,7 @@ void* malloc(uint32 nBytes) {
         foundSpace->freeLeft = 0;
     } else {
         #ifdef DEBUG_ERRORS
-        printf("BMALLOC-ALLOC-ERROR: traverseBestFit returned NONE dir\n");
+        printf("BDMALLOC-ALLOC-ERROR: traverseBestFit returned NONE dir\n");
         #endif
         return NULL;
     }
@@ -454,12 +456,12 @@ void* malloc(uint32 nBytes) {
     updateFreeFlags(foundSpace);
     // Path we took to get to free space.
     // Used to correctly set bits at every level again.
-    #ifdef DEBUG_BMALLOC
-    printf("BMALLOC-Found: ");
+    #ifdef DEBUG_BDMALLOC
+    printf("BDMALLOC-Found: ");
     DEBUGHEADER(foundSpace);
     #endif
     #ifdef DEBUG_ANCHOR
-    printf("BMALLOC-End: ");
+    printf("BDMALLOC-End: ");
     DEBUGHEADER(anchor);
     #endif
     return mallocSpace;

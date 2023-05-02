@@ -14,12 +14,12 @@ typedef union header Header;
 
 void main(int argc, char ** argv) {
   sbrk(0b1000);
-  char* arr[39] = {0};
-  for (int i = 0; i < 39; i++) {
+  char* arr[29] = {0};
+  for (int i = 0; i < 29; i++) {
     arr[i] = malloc(2<<i);
-    printf("%p\n", arr[i]);
+    printf("%d: %p\n", i, arr[i]);
   }
-  for (int i = 0; i < 39; i++) {
+  for (int i = 0; i < 29; i++) {
     free(arr[i]);
   }
   printf("Break===========================================================\n");
