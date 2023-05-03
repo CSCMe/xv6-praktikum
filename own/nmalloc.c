@@ -239,7 +239,7 @@ Header* fixDatastructure(uint32 highestLevel) {
 /**
  * Buddy allocator memory grower.
  * Allocates correct amount of memory needed to place all headers and validates data structure
- * Returns 0 on success, -1 on ereror
+ * Returns 0 on success, -1 on error
 */
 int bgrowmemory(uint32 requiredLevel) {
     // Some power of 2 that is passed to sbrk
@@ -257,9 +257,9 @@ int bgrowmemory(uint32 requiredLevel) {
     #ifdef DEBUG_GROWMEM
     printf("GROMEMORY: nLevel: %b, newBlocks:%d, existing:%d, total:%d, bytes:%d\n", requiredLevel, requiredBlocks, ((anchor->level << 2) - 1), ((requiredLevel << 2) - 1), requiredBlocks * BLOCKSIZE);
     #endif
-    // This entire allocator lives on the assumption that sbrk returns contiguous memory
-    // But here's error handling in case it doesn't provide new memory at all#
+
     // We don't need to fix alignment here, cuz we assume there are no sbrk calls in between
+    // If there are, the structure breaks :)
     uint64 allocSize = (requiredBlocks * BLOCKSIZE);
     uint64 rVal = 0;
     do {
@@ -275,6 +275,7 @@ int bgrowmemory(uint32 requiredLevel) {
         return -1;
     }
 
+    anchor = fixDatastructure(requiredLevel);
     return 0;
 }
 
@@ -365,9 +366,7 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
 }
 
 /**
- * Initializes anchor and base
- * Maybe change to allocate space in a different way?
- * idea: place first anchor immeadiately after stack segment, set LeftFree to 0
+ * Initializes stub anchor and base
 */
 void binit(uint32 requiredLevel) {
     // Let's try to keep initial size at a reasonable level
@@ -394,28 +393,35 @@ void binit(uint32 requiredLevel) {
         #endif
         rVal = (uint64) sbrk(curAlloc);
     } while (rVal != -1 && leftAllocSize > 0);
+
     #if defined(DEBUG_GROWMEM) || defined(DEBUG_ANCHOR)
     printf("BDMALLOC-binit: rs:%p af:%x, blocks:%lu, byte:%lu\n", rVal, alignFix, allocSize / BLOCKSIZE, allocSize);
     #endif
+
     if (rVal == -1) {
         #ifdef DEBUG_ERRORS
-        printf("BDMALLOC-CRITICAL-ERROR: NO ANCHOR");
+        printf("BDMALLOC-binit-CRITICAL-ERROR: COULD NOT ALLOCATE ANCHOR\n");
         #endif
         base = NULL;
         anchor = NULL;
         return;
     }
+
     anchor = ((base + ((requiredLevel << 2) - 1)) - (requiredLevel << 1));
-    anchor->freeLeft    = requiredLevel; 
-    anchor->freeRight   = requiredLevel;
-    anchor->level       = requiredLevel;
-    anchor->dirToParent = NONE; 
-    anchor->allocDirs   = NONE;
+    *anchor = (Header) {
+        .freeLeft    = requiredLevel,
+        .freeRight   = requiredLevel,
+        .level       = requiredLevel,
+        .dirToParent = NONE,
+        .allocDirs   = NONE,
+    };
+
     #ifdef DEBUG_GROWMEM
     printf("BDMALLOC-binit: nAnchor:%p, base:%p\n", anchor, base);
     DEBUGHEADER(anchor);
     #endif
 }
+
 /**
  * Buddy malloc
 */
@@ -439,7 +445,7 @@ void* malloc(uint32 nBytes) {
     // If we need more than we have ready
     if ((anchor->freeLeft < requiredLevel && anchor->freeRight < requiredLevel)) {
         // Grow memory and validates data structure
-        if (bgrowmemory(requiredLevel) || (anchor = fixDatastructure(requiredLevel)) == NULL) {
+        if (bgrowmemory(requiredLevel)) {
             #ifdef DEBUG_ERRORS
             printf("BDMALLOC-ALLOC-ERROR: Not enough free space\n");
             #endif
