@@ -3,6 +3,10 @@
 // Memory allocator by Kernighan and Ritchie,
 // The C programming Language, 2nd ed.  Section 8.7.
 
+//#define DEBUG_OLDMALLOC
+//#define DEBUG_OLDFREE
+//#define DEBUG_OLDGROW
+
 typedef long Align;
 
 union header {
@@ -57,7 +61,9 @@ morecore(uint nu)
   hp = (Header*)p;
   hp->s.size = nu;
   free((void*)(hp + 1));
+  #ifdef DEBUG_OLDGROW
   printf("MORECORE: size (byte):%x ptr:%p\n", hp->s.size * 16, hp->s.ptr);
+  #endif
   return freep;
 }
 
@@ -85,8 +91,10 @@ malloc(uint nbytes)
         p->s.size = nunits;  //sets size of new p
       }
       freep = prevp;
+      #ifdef DEBUG_OLDMALLOC
       printf("MALLOC: pointer pos:%p, region size (byte):%d\n", p, p->s.size * 16);
       printf("freeUpdate: pointer pos:%p, nextFree: %p ,region size (byte):%d\n", prevp->s.ptr, prevp->s.ptr->s.ptr,prevp->s.ptr->s.size * 16);
+      #endif
       return (void*)(p + 1); //Since p is 16 byte long, this always returns an address 16 bytes after p
     }
     if(p == freep) // Last prevp->s.ptr is pointing back to freeptr, basically the loop end condition

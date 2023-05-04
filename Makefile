@@ -163,6 +163,7 @@ UPROGS=\
 	$U/_test_printf\
 	$O/_test_own\
 	$O/_test_nmalloc\
+	$O/_compare_malloc\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

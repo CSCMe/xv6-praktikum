@@ -1,6 +1,4 @@
-#include "kernel/types.h"
 #include "user/user.h"
-#include "kernel/param.h"
 
 // Despite the numerous mentions of "Block", this is not Block allocation
 
@@ -106,17 +104,20 @@ void mergeRegion(Header* toMerge) {
         printf("BDFREE-Merging: ");
         DEBUGHEADER(toMerge);
     #endif
-    while (toMerge != anchor && toMerge->freeLeft == toMerge->freeRight && toMerge->freeLeft == toMerge->level) {
+    while (toMerge != anchor && (toMerge->freeLeft == toMerge->freeRight && toMerge->freeLeft == toMerge->level)) {
         #ifdef DEBUG_BDFREE
             printf("BDFREE-Merging-Cont: ");
             DEBUGHEADER(toMerge);
         #endif
+        uint32 nextLevel = (toMerge->level << 1);
         if (toMerge->dirToParent == LEFT) {
-            toMerge = toMerge - (toMerge->level << 1);
-            toMerge->freeRight = toMerge->level;
+            *toMerge = (Header){0};
+            toMerge = toMerge - nextLevel;
+            toMerge->freeRight = nextLevel;
         } else {
-            toMerge = toMerge + (toMerge->level << 1);
-            toMerge->freeLeft = toMerge->level;
+            *toMerge = (Header){0};
+            toMerge = toMerge + nextLevel;
+            toMerge->freeLeft = nextLevel;
         }
     }
     updateFreeFlags(toMerge);
@@ -218,11 +219,13 @@ Header* fixDatastructure(uint32 highestLevel) {
         // new Header. Like in updateFreeFlags we need to get to the next Header by adding the level of the new Header
         // Since newly allocated space is always "to the right" there's not problem here
         Header* nHeader = prevHeader + nLevel;
-        nHeader->allocDirs = NONE;
-        nHeader->dirToParent = NONE;
-        nHeader->freeLeft = prevHeader->freeLeft | prevHeader->freeRight;
-        nHeader->freeRight = nLevel;
-        nHeader->level = nLevel;
+        *nHeader = (Header){
+            .allocDirs = NONE, 
+            .dirToParent = NONE, 
+            .freeLeft= prevHeader->freeLeft | prevHeader->freeRight,
+            .freeRight = nLevel,
+            .level = nLevel,
+            };
 
         // Update dir to Parent of prevHeader
         prevHeader->dirToParent = RIGHT;
@@ -242,8 +245,6 @@ Header* fixDatastructure(uint32 highestLevel) {
  * Returns 0 on success, -1 on error
 */
 int bgrowmemory(uint32 requiredLevel) {
-    // Some power of 2 that is passed to sbrk
-    uint32 requiredBlocks;
     // If we couldn't find enough space in the anchor, we double our size
     if (anchor->level >= requiredLevel) {
         requiredLevel = anchor->level << 1;
@@ -253,7 +254,7 @@ int bgrowmemory(uint32 requiredLevel) {
     // i.e the formula blocks/level = (level << 2) -1
     // formula for new blocks with existing anchor = ((requiredLevel << 2) - 1) - ((anchor->level << 2) - 1)
     // Simplified to the following
-    requiredBlocks = (requiredLevel << 2) - (anchor->level << 2);
+    uint64 requiredBlocks = (requiredLevel << 2) - (anchor->level << 2);
     #ifdef DEBUG_GROWMEM
     printf("GROMEMORY: nLevel: %b, newBlocks:%d, existing:%d, total:%d, bytes:%d\n", requiredLevel, requiredBlocks, ((anchor->level << 2) - 1), ((requiredLevel << 2) - 1), requiredBlocks * BLOCKSIZE);
     #endif
@@ -274,8 +275,10 @@ int bgrowmemory(uint32 requiredLevel) {
     if (rVal == -1) {
         return -1;
     }
-
+    Header* prevAnchor = anchor;
     anchor = fixDatastructure(requiredLevel);
+    // Not very fast to call this here but needed to fix allocation bug
+    mergeRegion(prevAnchor);
     return 0;
 }
 
@@ -299,9 +302,9 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
     // Now we traverse the tree to this location
     while (uHeader->level != nextBestLevel){
         if (uHeader->freeLeft & nextBestLevel) {
-            uHeader = uHeader - uHeader->level;
+            uHeader -= uHeader->level;
         } else if (uHeader->freeRight & nextBestLevel){
-            uHeader = uHeader + uHeader->level;
+            uHeader += uHeader->level;
         } 
     }
 
@@ -377,10 +380,11 @@ void binit(uint32 requiredLevel) {
         requiredLevel = 0x80;
     }
     #endif
-
-    uint32 alignFix = 0x10 - (BLOCKALIGN & (uint64)sbrk(0));
-    base = (Header*) ((uint64)sbrk(alignFix) + alignFix);
     
+    uint32 alignError = sizeof(Header) - (BLOCKALIGN & (uint64)sbrk(0));
+    uint32 alignFix = alignError < 0x10 ? alignError : 0;
+
+    base = (Header*) ((uint64)sbrk(alignFix) + alignFix);
     // Amount of bytes requested from sbrk
     uint64 allocSize = (((requiredLevel << 2) - 1) * BLOCKSIZE);
     uint64 rVal = 0;
@@ -407,7 +411,7 @@ void binit(uint32 requiredLevel) {
         return;
     }
 
-    anchor = ((base + ((requiredLevel << 2) - 1)) - (requiredLevel << 1));
+    anchor = (base + ((requiredLevel << 1) - 1));
     *anchor = (Header) {
         .freeLeft    = requiredLevel,
         .freeRight   = requiredLevel,
@@ -415,7 +419,6 @@ void binit(uint32 requiredLevel) {
         .dirToParent = NONE,
         .allocDirs   = NONE,
     };
-
     #ifdef DEBUG_GROWMEM
     printf("BDMALLOC-binit: nAnchor:%p, base:%p\n", anchor, base);
     DEBUGHEADER(anchor);
@@ -494,4 +497,10 @@ void* malloc(uint32 nBytes) {
     DEBUGHEADER(anchor);
     #endif
     return mallocSpace;
+}
+
+void setup_malloc() {
+    // min Amount of contiguous we want, multiply by 16 to get bytes
+    uint64 blocks = 0x80;
+    binit(only_fs(blocks));
 }
