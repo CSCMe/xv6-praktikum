@@ -433,7 +433,7 @@ void* malloc(uint32 nBytes) {
         return NULL;
     }
 
-    uint32 requiredLevel = only_fs(nBytes / BLOCKSIZE);
+    uint32 requiredLevel = only_fs((nBytes + BLOCKSIZE - 1) / BLOCKSIZE);
     // There's no anchor yet.
     // We can rebuild him, we have the technology
     if(anchor == NULL) { 
