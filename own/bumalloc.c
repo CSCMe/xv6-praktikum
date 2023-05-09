@@ -1,11 +1,6 @@
-#include "user/user.h"
+#include "own/alloc.h"
 
 // Despite the numerous mentions of "Block", this is not Block allocation
-
-#define NULL 0
-#define MAX_INT 0x7FFFFFFF 
-#define BLOCKSIZE sizeof(Header)
-#define BLOCKALIGN (BLOCKSIZE - 1)
 //#define DEBUG_BDMALLOC
 //#define DEBUG_BDFREE
 //#define DEBUG_ANCHOR
@@ -13,60 +8,12 @@
 //#define DEBUG_GROWMEM
 //#define DEBUG_ERRORS
 
-typedef enum __dir{
-    NONE = 0,
-    LEFT = 1,
-    RIGHT  = 2
-} dir;
-
-/**
- * Struct describing the headers used in tree
- * size: 16 byte
-*/
-typedef struct __header {
-    // Splits on the left.
-    // No free space if 0.
-    // If 1 at least 1 free space of that level in that region
-    // If entire side is free = level
-    uint32 freeLeft;
-    // Splits on the right
-    // No free space if 0
-    // If Bit=1 at least 1 free space of that level in that region.
-    // If entire side is free = level
-    uint32 freeRight;
-    // Level in Blocks. Lowest Level is 2 x 16 Byte Regions aka 2 x 1 Block
-    // (Meaning a Level 0001 is residing over 2x 16 Byte Regions, one left, one right)
-    uint32 level;
-    // Path required to get to header
-    // Needed for free
-    uint16 dirToParent;
-    // Bitmap = LEFT | RIGHT when both sides directly allocated, LEFT when only left, RIGHT when only right
-    // Needed for free
-    uint16 allocDirs;
-} Header;
-
-// Prints all the information needed to debug a particular header
-#define DEBUGHEADER(header) printf("ptr:%p lvl:%b, fl:%b, fr:%b, dir:%b, allocDirs:%b\n", (header), (header)->level, (header)->freeLeft, (header)->freeRight, (header)->dirToParent, (header)->allocDirs)
-
-
-Header* base;
-Header* anchor = NULL;
-
-/**
- * Returns integer with only first set bit
- * Stolen from https://stackoverflow.com/a/3065433
-*/
-uint32 only_fs(uint32 num) {
-    uint32 l = 0;
-    while (num >>= 1) { ++l; }
-    return 1 << l;
-}
 
 /**
  * Goes up the structure to update free flags
  * uHeader: previously updated Header
 */
-void updateFreeFlags(Header* uHeader){
+void updateFreeFlags(Header* uHeader, Header* anchor){
     #ifdef DEBUG_BDMALLOC
     printf("Start flag update\n");
     #endif
@@ -98,7 +45,7 @@ void updateFreeFlags(Header* uHeader){
     }
 }
 
-void mergeRegion(Header* toMerge) {
+void bu_merge(Header* toMerge, Header* anchor) {
     // Is the entire region free?
     #ifdef DEBUG_BDFREE
         printf("BDFREE-Merging: ");
@@ -120,14 +67,14 @@ void mergeRegion(Header* toMerge) {
             toMerge->freeLeft = nextLevel;
         }
     }
-    updateFreeFlags(toMerge);
+    updateFreeFlags(toMerge, anchor);
 }
 
 /**
  * Frees memory allocated with BDMALLOC
  * And merges sides if both are free (TODO)
 */
-void free(void* address) {
+void bufree(void* address, Header* anchor, Header* base) {
     // Check the left side first
     // Header potentially responsible for the address
     Header* respHeader = ((Header*) address) - 1;
@@ -188,7 +135,7 @@ void free(void* address) {
         #endif
         return;
     }
-    mergeRegion(respHeader);
+    bu_merge(respHeader, anchor);
     #ifdef DEBUG_ANCHOR
     printf("BDFREE-End: ");
     DEBUGHEADER(anchor);
@@ -199,7 +146,7 @@ void free(void* address) {
  * Creates headers needed for consistent data structure
  * Returns pointer to new anchor
 */
-Header* fixDatastructure(uint32 highestLevel) {
+Header* bu_fix(uint32 highestLevel, Header* anchor) {
     // Previous header in loop
     // Usually starts at anchor
     Header* prevHeader = anchor;
@@ -239,54 +186,12 @@ Header* fixDatastructure(uint32 highestLevel) {
     return prevHeader;
 }
 
-/**
- * Buddy allocator memory grower.
- * Allocates correct amount of memory needed to place all headers and validates data structure
- * Returns 0 on success, -1 on error
-*/
-int bgrowmemory(uint32 requiredLevel) {
-    // If we couldn't find enough space in the anchor, we double our size
-    if (anchor->level >= requiredLevel) {
-        requiredLevel = anchor->level << 1;
-    }
-    // This formula is ver important and I would like to thank 
-    // https://math.stackexchange.com/questions/355963/ for their addition to the internet
-    // i.e the formula blocks/level = (level << 2) -1
-    // formula for new blocks with existing anchor = ((requiredLevel << 2) - 1) - ((anchor->level << 2) - 1)
-    // Simplified to the following
-    uint64 requiredBlocks = (requiredLevel << 2) - (anchor->level << 2);
-    #ifdef DEBUG_GROWMEM
-    printf("GROMEMORY: nLevel: %b, newBlocks:%d, existing:%d, total:%d, bytes:%d\n", requiredLevel, requiredBlocks, ((anchor->level << 2) - 1), ((requiredLevel << 2) - 1), requiredBlocks * BLOCKSIZE);
-    #endif
-
-    // We don't need to fix alignment here, cuz we assume there are no sbrk calls in between
-    // If there are, the structure breaks :)
-    uint64 allocSize = (requiredBlocks * BLOCKSIZE);
-    uint64 rVal = 0;
-    do {
-        int curAlloc = allocSize > MAX_INT ? MAX_INT : allocSize;
-        #ifdef DEBUG_GROWMEM
-        printf("GROMEMORY-sbrk: curAlloc: %d, leftAllocSize:%lu\n", curAlloc, allocSize);
-        #endif  
-        rVal = (uint64) sbrk(curAlloc);
-        allocSize -= curAlloc;
-    } while (rVal != -1 && allocSize > 0);
-
-    if (rVal == -1) {
-        return -1;
-    }
-    Header* prevAnchor = anchor;
-    anchor = fixDatastructure(requiredLevel);
-    // Not very fast to call this here but needed to fix allocation bug
-    mergeRegion(prevAnchor);
-    return 0;
-}
 
 /**
  * Assumption:
  * We always have more free blocks than nBlock
 */
-Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
+Header* traverseBestFit(uint32 requiredLevel, dir* rDir, Header* anchor) {
     // Travel down the tree
     // We need to find a region of the correct size
     uint32 nextBestLevel = requiredLevel;
@@ -369,99 +274,16 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir) {
 }
 
 /**
- * Initializes stub anchor and base
-*/
-void binit(uint32 requiredLevel) {
-    // Let's try to keep initial size at a reasonable level
-    #ifndef DEBUG_GROWMEM
-    // Allocate at least 2 x 2048+ Byte Regions
-    //contigStorableBytes = level << 4;
-    if (requiredLevel < 0x80) {
-        requiredLevel = 0x80;
-    }
-    #endif
-    
-    uint32 alignError = sizeof(Header) - (BLOCKALIGN & (uint64)sbrk(0));
-    uint32 alignFix = alignError < 0x10 ? alignError : 0;
-
-    base = (Header*) ((uint64)sbrk(alignFix) + alignFix);
-    // Amount of bytes requested from sbrk
-    uint64 allocSize = (((requiredLevel << 2) - 1) * BLOCKSIZE);
-    uint64 rVal = 0;
-    uint64 leftAllocSize = allocSize;
-    do {
-        int curAlloc = leftAllocSize > MAX_INT ? MAX_INT : leftAllocSize;
-        leftAllocSize -= curAlloc;
-        #ifdef DEBUG_GROWMEM
-        printf("BDMALLOC-binit-sbrk: curAlloc: %d, leftAllocSize:%lu\n", curAlloc, leftAllocSize);
-        #endif
-        rVal = (uint64) sbrk(curAlloc);
-    } while (rVal != -1 && leftAllocSize > 0);
-
-    #if defined(DEBUG_GROWMEM) || defined(DEBUG_ANCHOR)
-    printf("BDMALLOC-binit: rs:%p af:%x, blocks:%lu, byte:%lu\n", rVal, alignFix, allocSize / BLOCKSIZE, allocSize);
-    #endif
-
-    if (rVal == -1) {
-        #ifdef DEBUG_ERRORS
-        printf("BDMALLOC-binit-CRITICAL-ERROR: COULD NOT ALLOCATE ANCHOR\n");
-        #endif
-        base = NULL;
-        anchor = NULL;
-        return;
-    }
-
-    anchor = (base + ((requiredLevel << 1) - 1));
-    *anchor = (Header) {
-        .freeLeft    = requiredLevel,
-        .freeRight   = requiredLevel,
-        .level       = requiredLevel,
-        .dirToParent = NONE,
-        .allocDirs   = NONE,
-    };
-    #ifdef DEBUG_GROWMEM
-    printf("BDMALLOC-binit: nAnchor:%p, base:%p\n", anchor, base);
-    DEBUGHEADER(anchor);
-    #endif
-}
-
-/**
  * Buddy malloc
 */
-void* malloc(uint32 nBytes) {
-    if(nBytes == 0) {
-        return NULL;
-    }
-
-    uint32 requiredLevel = only_fs((nBytes + BLOCKSIZE - 1) / BLOCKSIZE);
-    // There's no anchor yet.
-    // We can rebuild him, we have the technology
-    if(anchor == NULL) { 
-        binit(requiredLevel);
-        if (anchor == NULL) {
-            #ifdef DEBUG_ERRORS
-            printf("BDMALLOC-CRITICAL-ERROR: NO ANCHOR");
-            #endif
-            return NULL;
-        }
-    }
-    // If we need more than we have ready
-    if ((anchor->freeLeft < requiredLevel && anchor->freeRight < requiredLevel)) {
-        // Grow memory and validates data structure
-        if (bgrowmemory(requiredLevel)) {
-            #ifdef DEBUG_ERRORS
-            printf("BDMALLOC-ALLOC-ERROR: Not enough free space\n");
-            #endif
-            return NULL;
-        }
-    }
+void* bumalloc(uint32 requiredLevel, Header* anchor) {
 
     // Now we definitely have a region that's big enough for us.
     // Just gotta find it somewhere.
     dir allocDir = NONE;
     
     // Now we find a space. We can change the strategy. (But why would we)
-    Header* foundSpace = traverseBestFit(requiredLevel, &allocDir);
+    Header* foundSpace = traverseBestFit(requiredLevel, &allocDir, anchor);
     // Address returned by BDMALLOC
     void* mallocSpace;
 
@@ -485,7 +307,7 @@ void* malloc(uint32 nBytes) {
     }
 
     foundSpace->allocDirs |= allocDir;
-    updateFreeFlags(foundSpace);
+    updateFreeFlags(foundSpace, anchor);
     // Path we took to get to free space.
     // Used to correctly set bits at every level again.
     #ifdef DEBUG_BDMALLOC
@@ -497,10 +319,4 @@ void* malloc(uint32 nBytes) {
     DEBUGHEADER(anchor);
     #endif
     return mallocSpace;
-}
-
-void setup_malloc() {
-    // min Amount of contiguous we want, multiply by 16 to get bytes
-    uint64 blocks = 0x80;
-    binit(only_fs(blocks));
 }

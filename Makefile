@@ -108,8 +108,8 @@ $U/initcode: $U/initcode.S
 tags: $(OBJS) _init
 	etags *.S *.c
 
-ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/umalloc.o $U/bmalloc.o $U/mmap-mock.o $U/futex.o
-ULIB += $U/user.o $O/nmalloc.o
+ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/mmap-mock.o $U/futex.o
+ULIB += $U/user.o $O/umalloc.o $O/bumalloc.o $O/bmalloc.o
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
