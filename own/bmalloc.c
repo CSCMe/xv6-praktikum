@@ -32,7 +32,7 @@ struct block block_alloc(uint32 size, uint32 align)
 
     uint64 newSize = size + align + sizeof(void**);
     // If required space too large: Abort
-    if (newSize > (uint)-1 || align == 0) {
+    if (newSize > (uint)-1  || !size || align == 0) {
         return output;
     }
 
