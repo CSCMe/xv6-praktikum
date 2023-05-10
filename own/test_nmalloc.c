@@ -23,7 +23,7 @@ void main(int argc, char ** argv) {
   // print region
   for (int i = 0; i < 511; i++) {
     Header* cur = needed + i;
-    if (cur->level != NULL) {
+    if (cur->level != 0) {
       printf("Free headers: %d\n", freeHeaders);
       freeHeaders = 0;
       DEBUGHEADER(cur);

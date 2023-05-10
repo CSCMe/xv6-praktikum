@@ -7,7 +7,6 @@ extern "C" {
 
 #include "user/user.h"
 
-#define NULL 0
 #define MAX_INT 0x7FFFFFFF 
 #define HEADERSIZE sizeof(Header)
 #define HEADERALIGN (HEADERSIZE - 1)

@@ -12,7 +12,7 @@ struct __managerList {
     uint32 length;
 };
 
-struct __managerList managerList = {.start = NULL, .length = NULL};
+struct __managerList managerList = {.start = NULL, .length = 0};
 
 /**
  * Returns a pointer to manager the address resides in
