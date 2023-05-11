@@ -15,6 +15,7 @@ extern "C" {
 #include "kernel/proc.h"
 #include "kernel/stat.h"
 #include "kernel/printk.h"
+#include "kernel/mmap.h"
 
 // start.c
 void            timerhalt(void);

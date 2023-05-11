@@ -32,5 +32,10 @@ SECTIONS
     *(.bss .bss.*)
   }
 
+  .debug_info : {
+    . = ALIGN(16);
+    *(.debug_info .debug_info.*)
+  }
+  
   PROVIDE(end = .);
 }

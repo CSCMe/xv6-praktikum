@@ -494,3 +494,37 @@ sys_pipe(void)
   }
   return 0;
 }
+
+
+/**
+ * *mmap(void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset);
+*/
+uint64
+sys_mmap(void)
+{
+  // mmap args
+  void* addr;
+  uint64 length;
+  int prot, flags, fd;
+  uint64 offset;
+
+  // Since we're on a 64 Bit system, registers are 64bit => argint returns 64 not 32 bit?
+  argaddr(0, (void*)&addr);
+  argint(1, (int*)&length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argint(4, &fd);
+  argint(5, (int*)&offset);
+  return __intern_mmap(addr, length, prot, flags, fd, offset);
+}
+
+uint64
+sys_munmap(void)
+{
+  void* addr;
+  uint64 length;
+  argaddr(0, (void*)&addr);
+  argint(1, (int*)&length);
+  return __intern_munmap(addr, length);
+}

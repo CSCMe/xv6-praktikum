@@ -1,6 +1,6 @@
 #include "kernel/syscall.h"
 #include "kernel/types.h"
-#include "user/user.h"
+#include "user/mmap.h"
 
 /**
  * Moves syscall number into a7 register, calls ecall
@@ -79,3 +79,26 @@ int hello_kernel(int group)
     SCGETRETURN(rVal);
     return rVal;
 } 
+
+
+void *mmap(void *addr, uint64 length, int prot, int flags, int fd, uint64 offset) {
+    SYSCALL(SYS_mmap);
+    uint64 rVal = 0;
+    SCGETRETURN(rVal);
+    // Chose PAGE_SIZE here as a n arbitrary value cuz MMAP_MIN_ALLOC is much larger
+    if (rVal < PAGE_SIZE) {
+        return MAP_FAILED;
+    }
+    return (void*) rVal;
+}
+
+int munmap(void *addr, uint64 length) {
+    SYSCALL(SYS_munmap);
+    uint64 rVal = 0;
+    SCGETRETURN(rVal);
+    // Chose PAGE_SIZE here as a n arbitrary value cuz MMAP_MIN_ALLOC is much larger
+    if (rVal > 0 && rVal < PAGE_SIZE) {
+        return (int) (uint64) MAP_FAILED;
+    }
+    return 0;
+}
