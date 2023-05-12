@@ -5,7 +5,7 @@
 // There are important things in riscv.h
 
 //#define DEBUG_PT
-#define DEBUG_ERRORS
+//#define DEBUG_ERRORS
 
 /**
  * Goes through the page table starting at addr baseAddr
@@ -177,17 +177,17 @@ uint64 __intern_munmap(void* addr, uint64 length) {
         return 0;
     }
 
-    uint64 nPages = PGROUNDUP(length);
+    uint64 nPages = PGROUNDUP(length) / PGSIZE;
 
     pagetable_t curTable = mycpu()->proc->pagetable;
 
     // Find the appropriate entry
     pte_t* tableEntry = walk(curTable, (uint64)addr, 0);
-    uint64 intEntry = (uint64) tableEntry;
+    uint64 intEntry = (uint64) *tableEntry;
 
-    if (tableEntry && intEntry & PTE_V && intEntry & PTE_U && intEntry & PTE_MM) {
+    if (intEntry != 0 && (intEntry & PTE_V) && (intEntry & PTE_U) && (intEntry & PTE_MM)) {
         // Invalidate mapping, freewalk will take care of the rest
-        uvmunmap(curTable, (uint64)addr, nPages, 0);
+        uvmunmap(curTable, (uint64)addr, nPages, 1);
     }
     return 0;
 }

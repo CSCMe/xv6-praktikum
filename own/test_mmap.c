@@ -14,9 +14,17 @@ void main (int arg, char** argv) {
     uint64 pid = fork();
     if (pid == 0) {
         *((char*) val) = 5;
+        munmap(val + PAGE_SIZE, 2 * PAGE_SIZE);
     }
     int status = 0;
     wait(&status);
+    if (pid == 0) {
+
+    printf("Childhere");
+    } else {
+
+    printf("parhere");
+    }
     printPT();
     printf("Expected: 33, got: %d", *((char*) val));
     printf("forkend\n");

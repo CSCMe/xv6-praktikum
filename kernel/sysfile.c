@@ -524,6 +524,6 @@ sys_munmap(void)
   void* addr;
   uint64 length;
   argaddr(0, (void*)&addr);
-  argint(1, (int*)&length);
+  argaddr(1, &length);
   return __intern_munmap(addr, length);
 }
