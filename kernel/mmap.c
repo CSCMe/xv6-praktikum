@@ -188,6 +188,8 @@ uint64 __intern_munmap(void* addr, uint64 length) {
     if (intEntry != 0 && (intEntry & PTE_V) && (intEntry & PTE_U) && (intEntry & PTE_MM)) {
         // Invalidate mapping, freewalk will take care of the rest
         uvmunmap(curTable, (uint64)addr, nPages, 1);
+    } else {
+        return EEXIST;
     }
     return 0;
 }
