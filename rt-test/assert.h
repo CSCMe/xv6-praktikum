@@ -23,7 +23,7 @@ extern "C" {
         __func__, __LINE__);                                                                       \
       exit(1);                                                                                     \
     }                                                                                              \
-  } while (false)
+  } while (0)
 
 
 #ifdef __cplusplus

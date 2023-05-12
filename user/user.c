@@ -102,3 +102,13 @@ int munmap(void *addr, uint64 length) {
     }
     return 0;
 }
+
+/**
+ * Moved here so I can test printf
+*/
+int write(int, const void*, int) {
+    SYSCALL(SYS_write);
+    uint64 rVal = 0;
+    SCGETRETURN(rVal);
+    return rVal;
+}

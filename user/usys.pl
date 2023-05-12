@@ -20,7 +20,6 @@ entry("exit");
 entry("wait");
 entry("pipe");
 entry("read");
-entry("write");
 entry("close");
 entry("kill");
 entry("exec");
