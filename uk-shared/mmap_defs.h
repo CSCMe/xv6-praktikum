@@ -9,8 +9,7 @@
 extern "C" {
 #endif
 
-#define MAP_FAILED  ((void *) -1)
-
+#define MMAP_MIN_ADDR (void*)((uint64)1 << 29)
 
 #define PROT_READ   0x1
 #define PROT_WRITE  0x2

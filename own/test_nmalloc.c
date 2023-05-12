@@ -79,12 +79,12 @@ void main(int argc, char ** argv) {
 
   char* newRegion = malloc(0xFFFFF0);
   malloc(0xFFFFF0);
-  printf("new Region: %p", newRegion);
+  printf("new Region1: %p", newRegion);
   manager = get_responsible_manager(newRegion);
   DEBUGHEADER(manager->anchor);
   newRegion = malloc(0xFFFFE0 >> 1);
   malloc(0xFFFFE0 >> 1);
-  printf("new Region: %p", newRegion);
+  printf("new Region2: %p", newRegion);
   manager = get_responsible_manager(newRegion);
   DEBUGHEADER(manager->anchor);
   newRegion = malloc(0xFFFFC0 >> 2);

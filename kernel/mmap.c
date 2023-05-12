@@ -94,7 +94,8 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
     if (prot & PROT_READ)
         entryProt |= PTE_R;
     if (prot & PROT_WRITE)
-        entryProt |= PTE_W;
+        // PROT_WRITE implies PROT_READ
+        entryProt |= PTE_W | PTE_R;
     if (prot & PROT_EXEC)
         entryProt |= PTE_X;
 
@@ -168,7 +169,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
 }
 
 uint64 __intern_munmap(void* addr, uint64 length) {
-    if ((uint64)addr % PAGE_SIZE != 0) {
+    if ((uint64)addr % PGSIZE != 0) {
         return EINVAL;
     }
 

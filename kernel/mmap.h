@@ -22,8 +22,6 @@ extern "C" {
 #define ENOMEM 0x194  // Memory not found
 
 
-#define MMAP_MIN_ADDR (void*)((uint64)1 << 29)
-
 uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uint64 offset) ;
 uint64 __intern_munmap(void* addr, uint64 length);
 

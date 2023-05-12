@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include "user/user.h"
+#include "user/mmap.h"
 
 #define MAX_INT 0x7FFFFFFF 
 #define HEADERSIZE sizeof(Header)

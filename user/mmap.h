@@ -13,7 +13,8 @@ extern "C" {
 #include "uk-shared/mmap_defs.h"
 
 #define PAGE_SIZE 4096
-
+#define PAGE_ROUNDUP(sz)  (((sz)+PAGE_SIZE-1) & ~(PAGE_SIZE-1))
+#define MAP_FAILED  ((void *) -1)
 
 // stolen from linux headers
 void *mmap(void *addr, uint64 length, int prot, int flags, int fd, uint64 offset);
