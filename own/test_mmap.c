@@ -8,8 +8,16 @@ void main (int arg, char** argv) {
     printf("%p\n", val);
     val = mmap(orgVal, 2 * PAGE_SIZE, PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     printf("%p\n", val);
-    val = mmap(orgVal, 3 * PAGE_SIZE, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+    val = mmap(orgVal, 3 * PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     printf("%p\n", val);
-    fork();
+    *((char*) val) = 33;
+    uint64 pid = fork();
+    if (pid == 0) {
+        *((char*) val) = 5;
+    }
+    int status = 0;
+    wait(&status);
+    printPT();
+    printf("Expected: 33, got: %d", *((char*) val));
     printf("forkend\n");
 }

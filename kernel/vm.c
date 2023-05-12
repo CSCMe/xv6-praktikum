@@ -315,6 +315,37 @@ uvmfree(pagetable_t pagetable, uint64 sz)
   freewalk(pagetable);
 }
 
+// Basically like uvmfreemmap, but instead of freeing it copies
+uint64 uvmcopymmap(pagetable_t new, pagetable_t old, pagetable_t curOld, uint64 constructedAddr)
+{
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = curOld[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      uvmcopymmap(new, old, (pagetable_t)child, (constructedAddr << 9) + i);
+    } else if ((pte & PTE_MM) && (pte & PTE_V) && (pte & PTE_U)){
+      // Address for this entry
+      uint64 entryVA = ((constructedAddr << 9) + i) << PGSHIFT;
+      uint64 entryPA = PTE2PA(pte);
+      uint64 entryFlags = PTE_FLAGS(pte);
+      // Copy this entry
+      void* newMemory = kalloc();
+      if (newMemory == NULL) {
+        return 1;
+      }
+      memmove(newMemory, (void*)entryPA, PGSIZE);
+      if(mappages(new, entryVA, PGSIZE, (uint64)newMemory, entryFlags) != 0){
+        // If mapping fails at some point, free the entire Area
+        kfree(newMemory);
+        uvmfreemmap(new, new, 0);
+        return 2;
+      }
+    }
+  }
+  return 0;
+}
+
 // Given a parent process's page table, copy
 // its memory into a child's page table.
 // Copies both the page table and the
@@ -346,7 +377,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
     }
   }
 
-  uint64 rVal = uvmcopymmap(old, new);
+  uint64 rVal = uvmcopymmap(new, old, old, 0);
   if (rVal != 0)
     goto err;
 
