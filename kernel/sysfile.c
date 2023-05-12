@@ -509,13 +509,12 @@ sys_mmap(void)
   int prot, flags, fd;
   uint64 offset;
 
-  // Since we're on a 64 Bit system, registers are 64bit => argint returns 64 not 32 bit?
   argaddr(0, (void*)&addr);
-  argint(1, (int*)&length);
+  argaddr(1, &length);
   argint(2, &prot);
   argint(3, &flags);
   argint(4, &fd);
-  argint(5, (int*)&offset);
+  argaddr(5, &offset);
   return __intern_mmap(addr, length, prot, flags, fd, offset);
 }
 

@@ -12,8 +12,6 @@ extern "C" {
 #include "kernel/stat.h"
 
 
-#define NULL ((void*)0)
-
 
 // system calls
 int fork(void);

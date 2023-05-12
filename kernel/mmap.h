@@ -15,13 +15,14 @@ extern "C" {
 #include "uk-shared/mmap_defs.h"
 
 /* Error codes */
-#define EPERM  0x0b1
-#define EINVAL 0x0b10
-#define ENIMPL 0x0b100
-#define ENOMEM 404 // Memory not found
+#define EPERM  0x1    // Permission error
+#define EINVAL 0x2    // Invalid input
+#define ENIMPL 0x3    // Not implemented
+#define EEXIST 0x4    // Mapping exists, but we don't want to overwrite
+#define ENOMEM 0x194  // Memory not found
 
 
-#define MMAP_MIN_ADDR ((uint64)1 << 34)
+#define MMAP_MIN_ADDR (void*)((uint64)1 << 29)
 
 uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uint64 offset) ;
 uint64 __intern_munmap(void* addr, uint64 length);

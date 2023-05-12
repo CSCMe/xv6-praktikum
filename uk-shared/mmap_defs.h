@@ -1,5 +1,5 @@
-/*! \file mmap.h
- * \brief mmap defines and function declarations
+/*! \file mmap_defs.h
+ * \brief mmap defines
  */
 
 #ifndef INCLUDED_shared_mmap_defs_h

@@ -165,6 +165,7 @@ UPROGS=\
 	$O/_test_own\
 	$O/_test_nmalloc\
 	$O/_compare_malloc\
+	$O/_test_mmap\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
