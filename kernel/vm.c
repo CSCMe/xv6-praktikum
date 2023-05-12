@@ -281,6 +281,29 @@ freewalk(pagetable_t pagetable)
   kfree((void*)pagetable);
 }
 
+/**
+ * Free mmaped user memory pages
+ * Walks through the pagetable and unmaps any mmaped entries, builds a constructed address using the PT indices
+*/
+uint64
+uvmfreemmap(pagetable_t highestLevel, pagetable_t pagetable, uint64 constructedAddr) 
+{
+  for (int i = 0; i < 512; i++) {
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      uvmfreemmap(highestLevel, (pagetable_t)child, (constructedAddr << 9) + i);
+    } else if ((pte & PTE_MM) && (pte & PTE_V) && (pte & PTE_U)){
+      // Address for this entry
+      uint64 entryAddr = ((constructedAddr << 9) + i) << PGSHIFT;
+      // Free the mmap entry
+      uvmunmap(highestLevel, entryAddr, 1, 1);
+    }
+  }
+  return 0;
+}
+
 // Free user memory pages,
 // then free page-table pages.
 void
@@ -288,6 +311,7 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 {
   if(sz > 0)
     uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
+  uvmfreemmap(pagetable, pagetable, 0);
   freewalk(pagetable);
 }
 
@@ -305,6 +329,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   uint flags;
   char *mem;
 
+  // Copy sbrk area
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
@@ -320,6 +345,11 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       goto err;
     }
   }
+
+  uint64 rVal = uvmcopymmap(old, new);
+  if (rVal != 0)
+    goto err;
+
   return 0;
 
  err:
@@ -453,7 +483,9 @@ print_pt(pagetable_t pagetable, int lvl)
           uint64 write : 1;
           uint64 execute : 1;
           uint64 user : 1;
-          uint64 unused : 5;
+          uint64 mmap : 1;
+          uint64 writeback: 1;
+          uint64 unused : 3;
         } bflags;
       };
       uint64 rest : 54;
@@ -467,9 +499,10 @@ print_pt(pagetable_t pagetable, int lvl)
       for (int i = 3; i >= lvl; i--) {
         pr_notice("%d:", i);
       }
-      pr_info("num:%d: %p, Flags: V:%d, R:%d, W:%d, X:%d, U:%d, \n", 
+      pr_info("num:%d: %p, Flags: V:%d, R:%d, W:%d, X:%d, U:%d, MM:%d, WB:%d\n", 
       i, entry.table, entry.debug.bflags.valid, entry.debug.bflags.read, 
-      entry.debug.bflags.write, entry.debug.bflags.execute, entry.debug.bflags.user);
+      entry.debug.bflags.write, entry.debug.bflags.execute, entry.debug.bflags.user,
+      entry.debug.bflags.mmap, entry.debug.bflags.writeback);
       print_pt((pagetable_t)PTE2PA(*pte), lvl - 1);
     }
     

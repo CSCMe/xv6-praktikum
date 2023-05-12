@@ -90,7 +90,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
 
     // Only used by user
     // Holds flags for mapping
-    int entryProt = PTE_U;
+    int entryProt = PTE_U | PTE_MM;
     if (prot & PROT_READ)
         entryProt |= PTE_R;
     if (prot & PROT_WRITE)
@@ -168,5 +168,25 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
 }
 
 uint64 __intern_munmap(void* addr, uint64 length) {
+    if ((uint64)addr % PAGE_SIZE != 0) {
+        return EINVAL;
+    }
+
+    if (addr < MMAP_MIN_ADDR) {
+        return 0;
+    }
+
+    uint64 nPages = PGROUNDUP(length);
+
+    pagetable_t curTable = mycpu()->proc->pagetable;
+
+    // Find the appropriate entry
+    pte_t* tableEntry = walk(curTable, (uint64)addr, 0);
+    uint64 intEntry = (uint64) tableEntry;
+
+    if (tableEntry && intEntry & PTE_V && intEntry & PTE_U && intEntry & PTE_MM) {
+        // Invalidate mapping, freewalk will take care of the rest
+        uvmunmap(curTable, (uint64)addr, nPages, 0);
+    }
     return 0;
 }

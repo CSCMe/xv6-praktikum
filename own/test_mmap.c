@@ -10,4 +10,6 @@ void main (int arg, char** argv) {
     printf("%p\n", val);
     val = mmap(orgVal, 3 * PAGE_SIZE, PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
     printf("%p\n", val);
+    fork();
+    printf("forkend\n");
 }
