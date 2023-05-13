@@ -19,30 +19,35 @@
 
 struct {
   struct spinlock lock;
-  struct buf buf[NBUF];
-
+  // Buffer are in array
+  BigBuf cachedBuffers[NBUF];
+  // And ordered by linkedList
   // Linked list of all buffers, through prev/next.
   // Sorted by how recently the buffer was used.
   // head.next is most recent, head.prev is least.
-  struct buf head;
+  BigBuf head;
 } bcache;
 
 void
 binit(void)
 {
-  struct buf *b;
+  BigBuf *b;
 
   initlock(&bcache.lock, "bcache");
 
   // Create linked list of buffers
   bcache.head.prev = &bcache.head;
   bcache.head.next = &bcache.head;
-  for(b = bcache.buf; b < bcache.buf+NBUF; b++){
+  for(b = bcache.cachedBuffers; b < bcache.cachedBuffers+NBUF; b++){
     b->next = bcache.head.next;
     b->prev = &bcache.head;
-    initsleeplock(&b->lock, "buffer");
     bcache.head.next->prev = b;
     bcache.head.next = b;
+    
+    b->page = kalloc();
+    if (b->page == 0) {
+      panic("binit: kalloc buffer alloc fail");
+    }
   }
 }
 
@@ -52,30 +57,39 @@ binit(void)
 static struct buf*
 bget(uint dev, uint blockno)
 {
-  struct buf *b;
+  BigBuf *big;
 
   acquire(&bcache.lock);
 
   // Is the block already cached?
-  for(b = bcache.head.next; b != &bcache.head; b = b->next){
-    if(b->dev == dev && b->blockno == blockno){
-      b->refcnt++;
+  for(big = bcache.head.next; big != &bcache.head; big = big->next){
+    if(big->device == dev && (blockno < (big->blockno + BLOCKS_PER_PAGE) && blockno >= big->blockno)){
+      //pr_debug("Reusing bigbuf\n");
+      big->refcount++;
+      int index = blockno - big->blockno;
       release(&bcache.lock);
-      acquiresleep(&b->lock);
-      return b;
+      return big->smallBuf + index;
     }
   }
 
   // Not cached.
   // Recycle the least recently used (LRU) unused buffer.
-  for(b = bcache.head.prev; b != &bcache.head; b = b->prev){
-    if(b->refcnt == 0) {
-      b->dev = dev;
-      b->blockno = blockno;
-      b->valid = 0;
-      b->refcnt = 1;
+  for(big = bcache.head.prev; big != &bcache.head; big = big->prev){
+    if(big->refcount == 0) {
+      big->device = dev;
+      big->blockno = blockno;
+
+      big->refcount = 1;
+      
+      struct buf* b = &(big->smallBuf[0]);
+      for (int i = 0; i < BLOCKS_PER_PAGE; i++) {
+        (b + i)->valid = 0;
+        (b + i)->blockno = blockno + i;
+        (b + i)->data = big->page + (i * BSIZE);
+        (b + i)->parent = big;
+      }
+
       release(&bcache.lock);
-      acquiresleep(&b->lock);
       return b;
     }
   }
@@ -90,6 +104,7 @@ bread(uint dev, uint blockno)
 
   b = bget(dev, blockno);
   if(!b->valid) {
+    //pr_debug("Readin': %p\n", b->data);
     virtio_disk_rw(b, 0);
     b->valid = 1;
   }
@@ -100,8 +115,6 @@ bread(uint dev, uint blockno)
 void
 bwrite(struct buf *b)
 {
-  if(!holdingsleep(&b->lock))
-    panic("bwrite");
   virtio_disk_rw(b, 1);
 }
 
@@ -110,21 +123,19 @@ bwrite(struct buf *b)
 void
 brelse(struct buf *b)
 {
-  if(!holdingsleep(&b->lock))
-    panic("brelse");
 
-  releasesleep(&b->lock);
-
+  BigBuf* parent = b->parent;
   acquire(&bcache.lock);
-  b->refcnt--;
-  if (b->refcnt == 0) {
+  parent->refcount--;
+  if (parent->refcount == 0) {
     // no one is waiting for it.
-    b->next->prev = b->prev;
-    b->prev->next = b->next;
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
+    parent->next->prev = parent->prev;
+    parent->prev->next = parent->next;
+    parent->next = bcache.head.next;
+    parent->prev = &bcache.head;
+    bcache.head.next->prev = parent;
+    bcache.head.next = parent;
+
   }
   
   release(&bcache.lock);
@@ -133,14 +144,14 @@ brelse(struct buf *b)
 void
 bpin(struct buf *b) {
   acquire(&bcache.lock);
-  b->refcnt++;
+  ((BigBuf*)b->parent)->refcount++;
   release(&bcache.lock);
 }
 
 void
 bunpin(struct buf *b) {
   acquire(&bcache.lock);
-  b->refcnt--;
+  ((BigBuf*)b->parent)->refcount--;
   release(&bcache.lock);
 }
 
