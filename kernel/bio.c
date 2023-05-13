@@ -17,15 +17,27 @@
 #include "defs.h"
 #include "buf.h"
 
+
+
+typedef struct {
+  BigBuf* buffer;
+  union {
+    uint64 searchKey;
+    struct {
+      uint32 device;
+      uint32 blocknum;
+    };
+  };
+  uint64 lastReleased;
+} bsearchEntry;
+
+
 struct {
   struct spinlock lock;
   // Buffer are in array
   BigBuf cachedBuffers[NBUF];
-  // And ordered by linkedList
-  // Linked list of all buffers, through prev/next.
-  // Sorted by how recently the buffer was used.
-  // head.next is most recent, head.prev is least.
-  BigBuf head;
+  bsearchEntry bsearchEntries[NBUF];
+  uint64 accessCounter;
 } bcache;
 
 void
@@ -34,20 +46,48 @@ binit(void)
   BigBuf *b;
 
   initlock(&bcache.lock, "bcache");
+  bcache.accessCounter = 0;
 
-  // Create linked list of buffers
-  bcache.head.prev = &bcache.head;
-  bcache.head.next = &bcache.head;
-  for(b = bcache.cachedBuffers; b < bcache.cachedBuffers+NBUF; b++){
-    b->next = bcache.head.next;
-    b->prev = &bcache.head;
-    bcache.head.next->prev = b;
-    bcache.head.next = b;
+  for (int i = 0 ; i < NBUF; i++) {
+    b = bcache.cachedBuffers + i;
     
     b->page = kalloc();
     if (b->page == 0) {
       panic("binit: kalloc buffer alloc fail");
     }
+    bsearchEntry* entry = bcache.bsearchEntries + i;
+    entry->device = -1;
+    entry->blocknum = 0;
+    entry->buffer = b;
+  }
+}
+
+static int binary_search(int start, int end, uint64 targetKey) {
+  int mid = (start + end) / 2;
+  bsearchEntry* midEntry = bcache.bsearchEntries + mid;
+  if (start == end) {
+    return -1;
+  } else if (targetKey < midEntry->searchKey + BLOCKS_PER_PAGE && targetKey >= midEntry->searchKey){
+    return mid;
+  } else if (targetKey < midEntry->searchKey) {
+    return binary_search(start, mid, targetKey);
+  } else if (targetKey > midEntry->searchKey) {
+    return binary_search(mid + 1, end, targetKey);
+  }
+}
+
+/**
+ * TODO: REDO, cuz pointers are not static or smth
+*/
+void binary_insert(int index) 
+{
+  bsearchEntry* searchEntry = bcache.bsearchEntries + index;
+  for (int i = 0; i < NBUF; i++) {
+    bsearchEntry* curEntry = (bcache.bsearchEntries + i);
+    if (i == index) {
+      continue;
+    }
+    if (searchEntry)
   }
 }
 
@@ -61,25 +101,25 @@ bget(uint dev, uint blockno)
 
   acquire(&bcache.lock);
 
-  // Is the block already cached?
-  for(big = bcache.head.next; big != &bcache.head; big = big->next){
-    if(big->device == dev && (blockno < (big->blockno + BLOCKS_PER_PAGE) && blockno >= big->blockno)){
-      //pr_debug("Reusing bigbuf\n");
-      big->refcount++;
-      int index = blockno - big->blockno;
-      release(&bcache.lock);
-      return big->smallBuf + index;
-    }
+  int searchResult = binary_search(0, NBUF, (((uint64)dev) << 32 ) + blockno);
+
+  // Entry is cached
+  if (searchResult != -1) {
+    big->refcount++;
+    int index = blockno - big->blockno;
+    release(&bcache.lock);
+    return big->smallBuf + index;
   }
 
-  // Not cached.
-  // Recycle the least recently used (LRU) unused buffer.
-  for(big = bcache.head.prev; big != &bcache.head; big = big->prev){
-    if(big->refcount == 0) {
+  // Entry is not cached, first possible
+  for (int i = 0; i < NBUF; i++) {
+    big = (bcache.bsearchEntries + i )->buffer;
+    if (big->refcount == 0) {
       big->device = dev;
       big->blockno = blockno;
-
       big->refcount = 1;
+
+      binary_insert(i);
       
       struct buf* b = &(big->smallBuf[0]);
       for (int i = 0; i < BLOCKS_PER_PAGE; i++) {
@@ -93,6 +133,7 @@ bget(uint dev, uint blockno)
       return b;
     }
   }
+
   panic("bget: no buffers");
 }
 
@@ -127,16 +168,6 @@ brelse(struct buf *b)
   BigBuf* parent = b->parent;
   acquire(&bcache.lock);
   parent->refcount--;
-  if (parent->refcount == 0) {
-    // no one is waiting for it.
-    parent->next->prev = parent->prev;
-    parent->prev->next = parent->next;
-    parent->next = bcache.head.next;
-    parent->prev = &bcache.head;
-    bcache.head.next->prev = parent;
-    bcache.head.next = parent;
-
-  }
   
   release(&bcache.lock);
 }

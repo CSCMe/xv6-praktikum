@@ -29,9 +29,6 @@ typedef struct __BigBuf {
   uchar* page;    // Page
   uint32 refcount; // num of references to PageBuffer 
   struct buf smallBuf[BLOCKS_PER_PAGE];
-  // Pls replace
-  struct __BigBuf *prev; // LRU cache list
-  struct __BigBuf *next;
 } BigBuf;
 
 
