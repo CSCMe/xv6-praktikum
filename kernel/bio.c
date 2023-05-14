@@ -145,10 +145,10 @@ int binary_insert(int index)
 
 void updateSize(bsearchEntry* updated, bsearchEntry* after) {
     uint64 newSize = ((after->searchKey - updated->searchKey));
-    if (newSize < BLOCKS_PER_PAGE) {
+    if(newSize == 0) {
+      panic("buffer: Limited size to 0"); 
+    } else if (newSize < BLOCKS_PER_PAGE) {
       updated->buffer->size = newSize;
-    } else if(newSize == 0) {
-      panic("buffer: Limited size to 0");  
     } else {
       updated->buffer->size = BLOCKS_PER_PAGE;
     }
