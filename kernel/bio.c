@@ -26,6 +26,8 @@ struct {
   bsearchEntry bsearchEntries[NBUF];
 } bcache;
 
+uint64 reuses = 0;
+uint64 newBufs = 0;
 
 void debug_bsearch() {
   pr_debug("PRINTING: BSEARCH--------------------------------------\n");
@@ -141,21 +143,20 @@ int binary_insert(int index)
   debug_bsearch(); */
 }
 
-// Look through buffer cache for block on device dev.
-// If not found, allocate a buffer.
-// In either case, return locked buffer.
-
 void updateSize(bsearchEntry* updated, bsearchEntry* after) {
     uint64 newSize = ((after->searchKey - updated->searchKey));
-      if (newPos < NBUF - 1 && newSize < BLOCKS_PER_PAGE) {
-        big->size = newSize;
-        if (newSize == 0)
-          panic("buffer: Limited size to 0");  
-        //debug_bsearch();
-      } else {
-        big->size = BLOCKS_PER_PAGE;
-      }
+    if (newSize < BLOCKS_PER_PAGE) {
+      updated->buffer->size = newSize;
+    } else if(newSize == 0) {
+      panic("buffer: Limited size to 0");  
+    } else {
+      updated->buffer->size = BLOCKS_PER_PAGE;
+    }
 }
+
+// Look through buffer cache for block on device dev.
+// If not found, allocate a buffer.
+// In either case, return a buffer.
 static struct buf*
 bget(uint dev, uint blockno)
 {
@@ -171,28 +172,40 @@ bget(uint dev, uint blockno)
     big->refcount++;
     int index = blockno - big->blockno;
     release(&bcache.lock);
+    reuses++;
     return big->smallBuf + index;
   }
 
-  // Entry is not cached, first possible
-  for (int i = 0; i < NBUF; i++) {
+  // Entry is not cached, last possible to populate entire cache
+  for (int i = NBUF - 1; i >= 0; i--) {
     bsearchEntry* entry = (bcache.bsearchEntries + i );
     big = entry->buffer;
     if (big->refcount == 0) {
+      newBufs++;
       big->device = dev;
       big->blockno = blockno;
       big->refcount = 1;
       entry->blocknum = blockno;
       entry->device = dev;
 
-      // Adjust old entry prev size
-      if (i != 0) {
-        (entry - 1)->buffer->size = (entry+1)->
+      // Adjust old entry prev size if we can acces 1 entry above and below i
+      // TODO: POTENTIAL BUG! FIND!
+      if (0 < i) {
+        if (i == NBUF - 1) {
+          updateSize(entry - 1, entry);
+        } else {
+          updateSize(entry - 1, entry + 1);
+        }
       }
 
       int newPos = binary_insert(i);
       entry = bcache.bsearchEntries + newPos;
+      if (newPos < NBUF-1) {
+        updateSize(entry, entry + 1);
+      }
+
       debug_bsearch();
+      pr_debug("Reusses: %p, nBufs:%p\n", reuses, newBufs);
 
       
       struct buf* b = &(big->smallBuf[0]);
