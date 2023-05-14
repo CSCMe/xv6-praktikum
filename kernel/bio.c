@@ -21,19 +21,18 @@
 
 struct {
   struct spinlock lock;
-  // Buffer are in array
+  // Buffer are in array, which is sorted
   BigBuf cachedBuffers[NBUF];
-  bsearchEntry bsearchEntries[NBUF];
 } bcache;
 
 uint64 reuses = 0;
 uint64 newBufs = 0;
 
-void debug_bsearch() {
+void debug_buffer() {
   pr_debug("PRINTING: BSEARCH--------------------------------------\n");
   for (int i = 0 ; i < NBUF; i++) {
-    bsearchEntry* entry = bcache.bsearchEntries + i;
-    pr_debug("ind:%d, sK:%p, size: %d\n",i,entry->searchKey, entry->buffer->size);
+    BigBuf* buf = bcache.cachedBuffers + i;
+    pr_debug("ind:%d, sK:%p, size: %d\n",i, buf->searchKey, buf->size);
   }
   pr_debug("END-----------------------------------------\n");
 }
@@ -53,24 +52,20 @@ binit(void)
     if (b->page == 0) {
       panic("binit: kalloc buffer alloc fail");
     }
-    bsearchEntry* entry = bcache.bsearchEntries + i;
-    entry->device = -1;
-    entry->blocknum = 0;
-    entry->buffer = b;
-    pr_debug("Invalid start key:%p\n", entry->searchKey);
+    b->device = -1;
+    b->blockno = 0;
+    pr_debug("Invalid start key:%p\n", b->searchKey);
   }
 }
 
 static int binary_search(int start, int end, uint64 targetKey) {
-
-  
   while (start != end) {
     int mid = (start + end) / 2;
     //pr_debug("start_%d, end:%d\n", start, end);
-    bsearchEntry* midEntry = bcache.bsearchEntries + mid;
+    BigBuf* midEntry = bcache.cachedBuffers + mid;
 
     // Found correct entry
-    if (targetKey < (midEntry->searchKey + midEntry->buffer->size) && targetKey >= midEntry->searchKey) {
+    if (targetKey < (midEntry->searchKey + midEntry->size) && targetKey >= midEntry->searchKey) {
 
       return mid;
     } else if (targetKey < midEntry->searchKey) {
@@ -96,20 +91,18 @@ static int binary_search(int start, int end, uint64 targetKey) {
 */
 int binary_insert(int index) 
 {
-  bsearchEntry searchEntry = *(bcache.bsearchEntries + index);
+  BigBuf searchBuf = *(bcache.cachedBuffers + index);
   
-  //pr_debug("ind:%d, sK:%p, lR:%p\n",index,searchEntry.searchKey,searchEntry.lastReleased);
-
   int newLoc = NBUF - 1;
   for (int i = 0; i < NBUF; i++) { // To look for new location
-    bsearchEntry* curEntry = (bcache.bsearchEntries + i);
+    BigBuf* curBuf = (bcache.cachedBuffers + i);
     if (index == i) {
       continue;
     }
-    if (searchEntry.searchKey == curEntry->searchKey) {
+    if (searchBuf.searchKey == curBuf->searchKey) {
       panic("buffer: binary_insert element already present");
     }
-    if (searchEntry.searchKey < curEntry->searchKey) {
+    if (searchBuf.searchKey < curBuf->searchKey) {
       newLoc = i;
       break;
     }
@@ -117,22 +110,21 @@ int binary_insert(int index)
 /* 
   pr_debug("newLoc: %d, old:%d\n", newLoc, index);
   pr_debug("BFORE:REORDER: ");
-  debug_bsearch(); */
+  debug_buffer(); */
   
   // We need to move things to the left 
   if (index < newLoc) {
     newLoc = newLoc - 1;
     for (int i = index; i < newLoc  && i < (NBUF - 1); i++) { 
-      bsearchEntry copy = bcache.bsearchEntries[i];
-      bcache.bsearchEntries[i] = bcache.bsearchEntries[i + 1];
-      bcache.bsearchEntries[i + 1] = copy;
+      BigBuf copy = bcache.cachedBuffers[i];
+      bcache.cachedBuffers[i] = bcache.cachedBuffers[i + 1];
+      bcache.cachedBuffers[i + 1] = copy;
     }
-  } else {
-    // We need to move everything to the right 
+  } else { // We need to move everything to the right 
     for (int i = index; i > newLoc && i > 0; i--) { 
-      bsearchEntry copy = bcache.bsearchEntries[i];
-      bcache.bsearchEntries[i] = bcache.bsearchEntries[i - 1];
-      bcache.bsearchEntries[i - 1] = copy;
+      BigBuf copy = bcache.cachedBuffers[i];
+      bcache.cachedBuffers[i] = bcache.cachedBuffers[i - 1];
+      bcache.cachedBuffers[i - 1] = copy;
     }
   }
 
@@ -140,17 +132,17 @@ int binary_insert(int index)
 
   return newLoc;
 /*   pr_debug("END:  ");
-  debug_bsearch(); */
+  debug_buffer(); */
 }
 
-void updateSize(bsearchEntry* updated, bsearchEntry* after) {
+void updateSize(BigBuf* updated, BigBuf* after) {
     uint64 newSize = ((after->searchKey - updated->searchKey));
     if(newSize == 0) {
       panic("buffer: Limited size to 0"); 
     } else if (newSize < BLOCKS_PER_PAGE) {
-      updated->buffer->size = newSize;
+      updated->size = newSize;
     } else {
-      updated->buffer->size = BLOCKS_PER_PAGE;
+      updated->size = BLOCKS_PER_PAGE;
     }
 }
 
@@ -168,7 +160,7 @@ bget(uint dev, uint blockno)
 
   // Entry is cached
   if (searchResult != -1) {
-    big = bcache.bsearchEntries[searchResult].buffer;
+    big = bcache.cachedBuffers + searchResult;
     big->refcount++;
     int index = blockno - big->blockno;
     release(&bcache.lock);
@@ -178,33 +170,30 @@ bget(uint dev, uint blockno)
 
   // Entry is not cached, last possible to populate entire cache
   for (int i = NBUF - 1; i >= 0; i--) {
-    bsearchEntry* entry = (bcache.bsearchEntries + i );
-    big = entry->buffer;
+    big = bcache.cachedBuffers + i;
     if (big->refcount == 0) {
       newBufs++;
       big->device = dev;
       big->blockno = blockno;
       big->refcount = 1;
-      entry->blocknum = blockno;
-      entry->device = dev;
 
       // Adjust old entry prev size if we can acces 1 entry above and below i
       // TODO: POTENTIAL BUG! FIND!
       if (0 < i) {
         if (i == NBUF - 1) {
-          updateSize(entry - 1, entry);
+          updateSize(big - 1, big);
         } else {
-          updateSize(entry - 1, entry + 1);
+          updateSize(big - 1, big + 1);
         }
       }
 
       int newPos = binary_insert(i);
-      entry = bcache.bsearchEntries + newPos;
+      big = bcache.cachedBuffers + newPos;
       if (newPos < NBUF-1) {
-        updateSize(entry, entry + 1);
+        updateSize(big, big + 1);
       }
 
-      debug_bsearch();
+      debug_buffer();
       pr_debug("Reusses: %p, nBufs:%p\n", reuses, newBufs);
 
       
