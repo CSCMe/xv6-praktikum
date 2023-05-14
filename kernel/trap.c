@@ -166,6 +166,9 @@ kerneltrap()
 
   if((which_dev = devintr()) == 0){
     pr_emerg("scause %p\n", scause);
+    if (r_scause() < 16) {
+      pr_emerg("%s\n", scause_map[r_scause()]);
+    }
     pr_emerg("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
   }
