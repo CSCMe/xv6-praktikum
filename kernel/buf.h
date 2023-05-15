@@ -36,6 +36,7 @@ typedef struct __BigBuf {
 
   uint32 refcount; // num of references to PageBuffer 
   uint32 size;    // (1-BLOCKS_PER_PAGE) Size of the bigbuf, how many smallBufs are usable?
+  uint64 generation; // Generation this BigBuf belongs to
   struct buf smallBuf[BLOCKS_PER_PAGE];
   uchar* page;    // Page
 
