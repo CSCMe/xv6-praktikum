@@ -2687,7 +2687,7 @@ void
 manywrites(char *s)
 {
   int nchildren = 4;
-  int howmany = 30; // increase to look for deadlock
+  int howmany = 160; // increase to look for deadlock
   
   for(int ci = 0; ci < nchildren; ci++){
     int pid = fork();

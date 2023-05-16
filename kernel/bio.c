@@ -59,7 +59,10 @@ binit(void)
     b->blockno = 0;
     b->generation = 0;
     b->refcount = 0;
-    pr_debug("Invalid start key:%p\n", b->searchKey);
+    //pr_debug("Invalid start key:%p\n", b->searchKey);
+    for (int i = 0; i < BLOCKS_PER_PAGE; i++) {
+      initsleeplock(&(b->smallBuf[i].lock), "smolBuff");
+    }
   }
 }
 
@@ -173,7 +176,8 @@ bget(uint dev, uint blockno)
     big->generation = ++bcache.generation;
     release(&bcache.lock);
     reuses++;
-    return big->smallBuf + index;
+    struct buf* b = big->smallBuf + index;
+    return b;
   }
 
   int lru_index = - 1;
@@ -204,10 +208,6 @@ bget(uint dev, uint blockno)
     } else {
       updateSize(big, -1);
     }
-
-    debug_buffer();
-    pr_debug("Reuses: %p, nBufs:%p\n", reuses, newBufs);
-
       
     struct buf* b = &(big->smallBuf[0]);
     for (int i = 0; i < BLOCKS_PER_PAGE; i++) {
@@ -225,18 +225,20 @@ bget(uint dev, uint blockno)
   panic("bget: no buffers");
 }
 
-// Return a locked buf with the contents of the indicated block.
+// Return a buf with the contents of the indicated block.
 struct buf*
 bread(uint dev, uint blockno)
 {
   struct buf *b;
 
   b = bget(dev, blockno);
+  acquiresleep(&b->lock);
   if(!b->valid) {
     //pr_debug("Readin': %p\n", b->data);
     virtio_disk_rw(b, 0);
     b->valid = 1;
   }
+  releasesleep(&b->lock);
   return b;
 }
 
@@ -244,7 +246,9 @@ bread(uint dev, uint blockno)
 void
 bwrite(struct buf *b)
 {
+  acquiresleep(&b->lock);
   virtio_disk_rw(b, 1);
+  releasesleep(&b->lock);
 }
 
 // Release a locked buffer.

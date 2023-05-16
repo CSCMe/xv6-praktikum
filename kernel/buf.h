@@ -12,14 +12,15 @@ extern "C" {
 #include "kernel/sleeplock.h"
 #include "kernel/fs.h"
 
-#define BLOCKS_PER_PAGE PGSIZE / BSIZE
+#define BLOCKS_PER_PAGE 4096 / BSIZE
 
 struct buf {
-  int disk;    // does disk "own" buf?
-  uint blockno;   // blockno, aligned to BUFFER_SIZE
-  uint valid;
-  void* parent;
-  uchar* data;
+  int disk;    // does disk "own" buf?, used during virtio_disk_rw
+  uint blockno;   // blockno
+  struct sleeplock lock; // lock for disk r/w
+  uint valid; // is this buf valid? (read from disk)
+  void* parent; // BigBuf parent of this buffer
+  uchar* data; // 
 };
 
 typedef struct __BigBuf {
@@ -34,11 +35,11 @@ typedef struct __BigBuf {
     };
   };
 
-  uint32 refcount; // num of references to PageBuffer 
-  uint32 size;    // (1-BLOCKS_PER_PAGE) Size of the bigbuf, how many smallBufs are usable?
+  uint32 refcount;    // num of references to PageBuffer 
+  uint32 size;       // (1-BLOCKS_PER_PAGE) Size of the bigbuf, how many smallBufs should be used?
   uint64 generation; // Generation this BigBuf belongs to
   struct buf smallBuf[BLOCKS_PER_PAGE];
-  uchar* page;    // Page
+  uchar* page;    // page where data for smallBufs is stored
 
 } BigBuf;
 

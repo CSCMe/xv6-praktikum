@@ -86,7 +86,7 @@ printk(char *fmt, ...)
   if (fmt == 0) 
     panic("null fmt");
 
-  //setoutputpriority(fmt[0]);
+  setoutputpriority(fmt[0]);
 
   va_start(ap, fmt);
   for(i = 1; (c = fmt[i] & 0xff) != 0; i++){
@@ -125,7 +125,7 @@ printk(char *fmt, ...)
   }
   va_end(ap);
 
-  //setoutputpriority(LOGLEVEL_DEFAULT);
+  setoutputpriority(LOGLEVEL_DEFAULT);
 
   if(locking)
     release(&pr.lock);
