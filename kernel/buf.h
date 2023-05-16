@@ -15,10 +15,9 @@ extern "C" {
 #define BLOCKS_PER_PAGE 4096 / BSIZE
 
 struct buf {
-  int disk;    // does disk "own" buf?, used during virtio_disk_rw
   uint blockno;   // blockno
-  struct sleeplock lock; // lock for disk r/w
   uint valid; // is this buf valid? (read from disk)
+  struct sleeplock lock; // lock for disk r/w
   void* parent; // BigBuf parent of this buffer
   uchar* data; // 
 };
