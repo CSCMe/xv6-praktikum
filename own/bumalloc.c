@@ -72,7 +72,7 @@ void bu_merge(Header* toMerge, Header* anchor) {
 
 /**
  * Frees memory allocated with BDMALLOC
- * And merges sides if both are free (TODO)
+ * Merges sides if both are free
 */
 void bufree(void* address, Header* anchor, Header* base) {
     // Check the left side first

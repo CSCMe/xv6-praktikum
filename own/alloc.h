@@ -12,6 +12,11 @@ extern "C" {
 #define HEADERSIZE sizeof(Header)
 #define HEADERALIGN (HEADERSIZE - 1)
 
+// Stolen from riscv.h, needed for mmap parts
+#ifndef PGROUNDUP
+    #define PGROUNDUP(sz)  (((sz)+PAGE_SIZE-1) & ~(PAGE_SIZE-1))
+#endif
+
 /**
  * Struct describing the headers used in tree
  * size: 16 byte

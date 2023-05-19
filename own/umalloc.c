@@ -6,6 +6,7 @@
 //#define DEBUG_ERRORS
 //#define DEBUG_GROWMAN
 //#define DEBUG_MANAGERS
+//#define DEBUG_INIT
 
 struct __managerList {
     BuddyManager* start;
@@ -148,30 +149,38 @@ BuddyManager* get_and_init_manager(uint32 requiredLevel) {
 
     // We're going to be mad if we fail at this point, but it could happen
     // Allocate memory for new manager list
-    uint64 alignFix = (sizeof(BuddyManager) - ((uint64)sbrk(0) % sizeof(BuddyManager))) % sizeof(BuddyManager);
-    uint64 rVal = (uint64)sbrk(alignFix + (sizeof(BuddyManager) * (managerList.length + 1)));
-    if (rVal == -1) {
+    uint64 neededMem = PGROUNDUP(sizeof(BuddyManager) * (managerList.length + 1));
+
+    void* rVal = mmap(NULL, neededMem, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    if (rVal == MAP_FAILED) {
         #ifdef DEBUG_ERRORS
         printf("MALLOC-CRITICAL-ERROR: Couldn't allocate space for new list\n");
         #endif
         return NULL;
     }
 
-    BuddyManager* newStart = (BuddyManager*) (rVal + alignFix);
+    BuddyManager* newStart = (BuddyManager*) (rVal);
     // Copy old list to new location
     // Not using mmove cuz I'm incapable of using it
     for (int i = 0; i < managerList.length; i++) {
         *(newStart + i) = *(managerList.start + i);
     }
+
+    // Unmap previous managerList
+    munmap( managerList.start, PGROUNDUP(sizeof(BuddyManager) * managerList.length));
+
     managerList.length++;
     managerList.start = newStart;
+
     // We need to initialize the manager
     // If we can't initialize a new manager with the right size, we'll never find one -> abort
     // Move this to get_and_init_manager
     BuddyManager* newManager = managerList.start + (managerList.length - 1);
-    #ifdef DEBUG_MANAGERS
+
+    #ifdef DEBUG_INIT
     printf("MALLOC-DEBUG-GIM: listStart:%p, newManager:%p, manSize:%x \n",managerList.start, newManager, sizeof(BuddyManager));
     #endif
+
     if (manInit(requiredLevel, newManager)) {
         #ifdef DEBUG_ERRORS
         printf("MALLOC-MAJOR-ERROR: Couldn't initialize new manager\n");
