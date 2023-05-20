@@ -63,11 +63,11 @@ int manInit(uint32 requiredLevel, BuddyManager* manager) {
     // Allocate at least 2 x 2048+ Byte Regions
     //contigStorableBytes = level << 4;
     // Allocate at least one page, later with mmap this might be page aligned
-    if (requiredLevel < 0x80) {
-        requiredLevel = 0x80;
+    if (requiredLevel < MIN_BUDDY_SIZE) {
+        requiredLevel = MIN_BUDDY_SIZE;
     }
     
-    uint32 alignFix = HEADERSIZE - ((uint64)sbrk(0) % HEADERSIZE) % HEADERSIZE;
+    uint32 alignFix = (HEADERSIZE - ((uint64)sbrk(0) % HEADERSIZE)) % HEADERSIZE;
 
     // Set base pointer to start of aligned Area
     manager->base = (Header*) ((uint64)sbrk(alignFix) + alignFix);
@@ -329,5 +329,5 @@ void* malloc(uint32 nBytes) {
 void setup_malloc() {
     // Make first Manager in here
     // And initialize it
-    get_and_init_manager(0x80);
+    get_and_init_manager(MIN_BUDDY_SIZE);
 }

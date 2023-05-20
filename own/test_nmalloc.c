@@ -21,7 +21,8 @@ void main(int argc, char ** argv) {
 
   int freeHeaders = 0;
   // print region
-  for (int i = 0; i < 511; i++) {
+  // End should be 1 more than start
+  for (int i = 0; i < 256; i++) {
     Header* cur = needed + i;
     if (cur->level != 0) {
       printf("Free headers: %d\n", freeHeaders);

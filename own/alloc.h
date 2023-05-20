@@ -11,6 +11,7 @@ extern "C" {
 #define MAX_INT 0x7FFFFFFF 
 #define HEADERSIZE sizeof(Header)
 #define HEADERALIGN (HEADERSIZE - 1)
+#define MIN_BUDDY_SIZE 0x40 // Get an entire page at first
 
 // Stolen from riscv.h, needed for mmap parts
 #ifndef PGROUNDUP
