@@ -1,11 +1,57 @@
 #include "kernel/defs.h"
 #include "kernel/memlayout.h"
 #include "kernel/printk.h"
+#include "kernel/buf.h"
 
 // There are important things in riscv.h
 
-//#define DEBUG_PT
-//#define DEBUG_ERRORS
+MapSharedEntry shared_mappings_table[SHARED_MAPPING_ENTRIES_NUM];
+
+/**
+ * Hash function for shared_mappings_map
+*/
+uint64 hash_function(uint64 key) {
+    key ^= (key >> 33);
+    key *= 0xff51afd7ed558ccd;
+    key ^= (key >> 33);
+    key *= 0xc4ceb9fe1a85ec53;
+    key ^= (key >> 33);
+
+    return key % SHARED_MAPPING_ENTRIES_NUM;
+}
+
+/**
+ * Search for next best free entry
+*/
+int64 get_free_table_pos(uint64 key) {
+    uint64 result = hash_function(key);
+    uint64 count = 0;
+    while (shared_mappings_table[result].physicalAddr != NULL) {
+        result = (result + 1) % SHARED_MAPPING_ENTRIES_NUM;
+        count++;
+        if (count == SHARED_MAPPING_ENTRIES_NUM) {
+            return -1;
+        }
+    }
+    return result;
+}
+
+/**
+ * Inserts an entry into the hash table
+ * return -1 on error, 0 on success
+ * Still WIP
+*/
+int64 insert_table(struct buf* underlying_buf,  void* physicalAddr) {
+    int64 pos = get_free_table_pos((uint64)physicalAddr);
+    if (pos < 0) {
+        return -1;
+    }
+    MapSharedEntry* myEntry = shared_mappings_table + pos;
+    myEntry->refCount = 1;
+    myEntry->physicalAddr = physicalAddr;
+    myEntry->underlying_buf = underlying_buf;
+    return 0;
+}
 
 /**
  * Goes through the page table starting at addr baseAddr
@@ -60,10 +106,20 @@ uint64 is_valid_addr(uint64 addr) {
     return (addr % PGSIZE == 0) && ((void*)addr == NULL || addr >= (uint64)MMAP_MIN_ADDR) && (addr < MAXVA);
 }
 
+struct buf* get_nth_buffer_from_file(uint64 n, struct file* f) {
+    ilock(f->ip);
+    uint addr = bmap(f->ip, n);
+    if(addr == 0)
+      panic("mmap should not allocate new disk blocks (and should not fail)");
+    struct buf* bp = bread(f->ip->dev, addr);
+    iunlock(f->ip);
+    return bp;
+}
+
 /**
  * Internal version of mmap, called by system call
 */
-uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uint64 offset) 
+uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file *f, uint64 offset) 
 {
     // Check preconditions:
     if ( !is_valid_addr((uint64)addr)
@@ -80,12 +136,23 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
         addr = MMAP_MIN_ADDR;
     }
 
-    // Not implemented
-    if (flags & MAP_SHARED) {
-        #ifdef DEBUG_ERRORS
-        pr_debug("INTERN-MMAP-ENIMPL");
-        #endif
-        return ENIMPL;
+    // Check if file perm are valid
+    if (!(flags & MAP_ANONYMOUS)) {
+        if (!(f->readable)) {
+            return EPERM;
+        } 
+        if (!(f->writable) && prot & PROT_WRITE) {
+            return EACCESS;
+        }
+        if (f->type != FD_INODE) {
+            return EACCESS;
+        }
+        if (f->ip->valid == 0) {
+            return EBADF;
+        }
+        if (length + offset > f->ip->size) {
+            return EINVAL;
+        }
     }
 
     // Only used by user
@@ -101,6 +168,11 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
 
     if (!(flags & MAP_POPULATE)) {
         // We shall ignore this for now
+    }
+
+    // MAP_SHARED sets PTE_SH page bit
+    if (flags & MAP_SHARED) {
+        entryProt |= PTE_SH;
     }
 
     // Here begins actual mapping
@@ -126,15 +198,53 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
     // go through the pages and map them
     // Since physical memory comes in PGSIZE chunks we need to loop here
     for (int i = 0; i < required_pages; i++) {
-        void* curAlloc = kalloc();
-        if (curAlloc == NULL) {
-            // kernel malloc error
-            #ifdef DEBUG_ERRORS
-            pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed\n");
-            #endif
-            return ENOMEM;
+        
+        void* curAlloc;
+        // We might need to pre-0 the pages, kernel memset uses physical addresses
+        if (flags & MAP_ANONYMOUS) {
+            curAlloc = kalloc();
+
+            if (curAlloc == NULL) {
+                // kernel malloc error
+                #ifdef DEBUG_ERRORS
+                pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed\n");
+                #endif
+                return ENOMEM;
+            }
+            memset((void*)curAlloc, 0, PGSIZE);
+        }
+        else {
+            // Get file backed mapping
+            struct buf* curBuf = get_nth_buffer_from_file(i + (offset / PGSIZE), f);
+            // private file backed mappings are simple copies that aren't reflected on the actual file
+            if (flags & MAP_PRIVATE) {
+                curAlloc = kalloc();
+
+                if (curAlloc == NULL) {
+                    // kernel malloc error
+                    #ifdef DEBUG_ERRORS
+                    pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed\n");
+                    #endif
+                    return ENOMEM;
+                }
+                memmove(curAlloc, curBuf->data, PGSIZE);
+
+            } else { // Else shared
+                curAlloc = curBuf->data;
+                if (curAlloc == NULL) {
+                    #ifdef DEBUG_ERRORS
+                    pr_debug("INTERN-MMAP-ENOMEM: File Buffer get fail\n");
+                    #endif
+                    return ENOMEM;
+                }
+            }
+
         }
 
+        if (flags & MAP_SHARED) {
+
+        }
+        
         // VA of our current page
         uint64 curVA = base + (i * PGSIZE);
 
@@ -152,10 +262,6 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uin
             pr_debug("INTERN-MMAP-ENOMEM: mappages fail\n");
             #endif
             return ENOMEM;
-        }
-        // Else we might need to pre-0 the pages, kernel memset uses physical addresses
-        if (flags & MAP_ANONYMOUS) {
-            memset((void*)curAlloc, 0, PGSIZE);
         }
 
     }

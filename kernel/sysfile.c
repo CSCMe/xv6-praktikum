@@ -507,15 +507,20 @@ sys_mmap(void)
   void* addr;
   uint64 length;
   int prot, flags, fd;
+  struct file *f;
   uint64 offset;
 
   argaddr(0, (void*)&addr);
   argaddr(1, &length);
   argint(2, &prot);
   argint(3, &flags);
-  argint(4, &fd);
+
+  if (argfd(4,&fd,&f) < 0 && fd != -1 && !(flags & MAP_ANON)) {
+    return EBADF;
+  }
+
   argaddr(5, &offset);
-  return __intern_mmap(addr, length, prot, flags, fd, offset);
+  return __intern_mmap(addr, length, prot, flags, f, offset);
 }
 
 uint64

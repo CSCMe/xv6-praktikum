@@ -361,6 +361,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PTE_D (1L << 7) // Page entry is dirty
 // Reserved bits: 8,9
 #define PTE_MM (1L << 8) // Page was allocated by MMAP
+#define PTE_SH (1L << 9) // Page has shared contents
 
 // shift a physical address to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)

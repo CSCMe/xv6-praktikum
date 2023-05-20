@@ -14,16 +14,28 @@ extern "C" {
 // Flags and stuff is in here
 #include "uk-shared/mmap_defs.h"
 
+#define SHARED_MAPPING_ENTRIES_NUM 256
+
 /* Error codes */
 #define EPERM  0x1    // Permission error
 #define EINVAL 0x2    // Invalid input
 #define ENIMPL 0x3    // Not implemented
 #define EEXIST 0x4    // Mapping exists, but we don't want to overwrite
 #define ENOMEM 0x194  // Memory not found
+#define EACCESS 0x5   // 
+#define EBADF   0x6
 
-
-uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, int fd, uint64 offset) ;
+uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file* f, uint64 offset) ;
 uint64 __intern_munmap(void* addr, uint64 length);
+
+typedef struct __map_shared_entry {
+    // How many procs have mapped this page
+    uint64 refCount;
+    // Buffer is NULL if not file backed
+    struct buf* underlying_buf;
+    // Entry is invalid when NULL
+    void* physicalAddr;
+} MapSharedEntry;
 
 #ifdef __cplusplus
 }
