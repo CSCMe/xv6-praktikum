@@ -5,7 +5,17 @@
 
 // There are important things in riscv.h
 
-MapSharedEntry shared_mappings_table[SHARED_MAPPING_ENTRIES_NUM];
+struct {
+    MapSharedEntry entries[SHARED_MAPPING_ENTRIES_NUM];
+    struct spinlock tableLock;
+} shared_mappings_table;
+
+void init_mmap() {
+    initlock(&shared_mappings_table.tableLock, "mmap");
+    for (int i = 0; i < SHARED_MAPPING_ENTRIES_NUM; i++) {
+        shared_mappings_table.entries[i] = (MapSharedEntry){.physicalAddr=NULL, .refCount=0,.underlying_buf=NULL};
+    }
+}
 
 /**
  * Hash function for shared_mappings_map
@@ -20,13 +30,15 @@ uint64 hash_function(uint64 key) {
     return key % SHARED_MAPPING_ENTRIES_NUM;
 }
 
+
 /**
- * Search for next best free entry
+ * Search the table for an entry with the specified targetKey, uses key in the hash function
+ * Returns -1 on failure, index on success
 */
-int64 get_free_table_pos(uint64 key) {
+int64 table_lookup(uint64 key, void* targetKey) {
     uint64 result = hash_function(key);
     uint64 count = 0;
-    while (shared_mappings_table[result].physicalAddr != NULL) {
+    while (shared_mappings_table.entries[result].physicalAddr != targetKey) {
         result = (result + 1) % SHARED_MAPPING_ENTRIES_NUM;
         count++;
         if (count == SHARED_MAPPING_ENTRIES_NUM) {
@@ -38,18 +50,74 @@ int64 get_free_table_pos(uint64 key) {
 
 /**
  * Inserts an entry into the hash table
- * return -1 on error, 0 on success
- * Still WIP
+ * return -1 on error, index on success
 */
-int64 insert_table(struct buf* underlying_buf,  void* physicalAddr) {
-    int64 pos = get_free_table_pos((uint64)physicalAddr);
+int64 acquire_or_insert_table(struct buf* underlying_buf,  void* physicalAddr) {
+    acquire(&shared_mappings_table.tableLock);
+    int64 pos = table_lookup((uint64)physicalAddr, physicalAddr);
+
+    // If entry does not exist, make new one
     if (pos < 0) {
-        return -1;
+        pos = table_lookup((uint64)physicalAddr, NULL);
+        if (pos < 0) {
+            return -1;
+        }
     }
-    MapSharedEntry* myEntry = shared_mappings_table + pos;
-    myEntry->refCount = 1;
+
+    MapSharedEntry* myEntry = shared_mappings_table.entries + pos;
+    myEntry->refCount++;
     myEntry->physicalAddr = physicalAddr;
     myEntry->underlying_buf = underlying_buf;
+
+    release(&shared_mappings_table.tableLock);
+    return pos;
+}
+
+/**
+ * Returns 0 if memory should not be freed
+*/
+int64 munmap_shared(uint64 physicalAddr) {
+    acquire(&shared_mappings_table.tableLock);
+    int64 holeIndex = table_lookup(physicalAddr, (void*) physicalAddr);
+    // Panic if entry not in table (required, if not: table broke)
+    if (holeIndex < 0) {
+        panic("munmap-shared");
+    }
+    // Remove current entry
+    MapSharedEntry copy = shared_mappings_table.entries[holeIndex];
+    MapSharedEntry* currentEntry = shared_mappings_table.entries + holeIndex;
+    if ((--(currentEntry->refCount)) == 0) {
+        currentEntry->physicalAddr = NULL;
+        struct buf* entryBuf = currentEntry->underlying_buf;
+        if (entryBuf != NULL) {
+            brelse(entryBuf);
+        }
+
+        // Loop through all successive entries until there's an empty one, and move the entries to their new position
+        // There is always an empty entry, so (theoretically) no infinite loop here
+        int64 curIndex = (holeIndex + 1) % SHARED_MAPPING_ENTRIES_NUM;
+        int64 holeDistance = 1;
+        // See for wraparound case explanation: https://cs.stackexchange.com/a/60198
+        while ((currentEntry = shared_mappings_table.entries + curIndex)->physicalAddr != NULL) {
+            int64 shouldBeIndex = hash_function((uint64)currentEntry->physicalAddr);
+            int64 distance = (curIndex - shouldBeIndex) % SHARED_MAPPING_ENTRIES_NUM;
+            // Inspired by: https://github.com/leventov/Koloboke/blob/68515672575208e68b61fadfabdf68fda599ed5a/benchmarks/research/src/main/javaTemplates/com/koloboke/collect/research/hash/NoStatesLHashCharSet.java#L194-L212
+            if (distance >= holeDistance) {
+                shared_mappings_table.entries[holeIndex] = shared_mappings_table.entries[curIndex];
+                holeIndex = curIndex;
+                holeDistance = 1;
+            } else {
+                holeDistance++;
+            }
+        }
+
+        shared_mappings_table.entries[holeIndex] = (MapSharedEntry){.physicalAddr=NULL, .refCount=0, .underlying_buf=NULL};
+
+        // Never free a buffer!
+        release(&shared_mappings_table.tableLock);
+        return copy.underlying_buf == NULL;
+    }
+    release(&shared_mappings_table.tableLock);
     return 0;
 }
 
@@ -200,6 +268,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
     for (int i = 0; i < required_pages; i++) {
         
         void* curAlloc;
+        struct buf* curBuf = NULL;
         // We might need to pre-0 the pages, kernel memset uses physical addresses
         if (flags & MAP_ANONYMOUS) {
             curAlloc = kalloc();
@@ -215,7 +284,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         }
         else {
             // Get file backed mapping
-            struct buf* curBuf = get_nth_buffer_from_file(i + (offset / PGSIZE), f);
+            curBuf = get_nth_buffer_from_file(i + (offset / PGSIZE), f);
             // private file backed mappings are simple copies that aren't reflected on the actual file
             if (flags & MAP_PRIVATE) {
                 curAlloc = kalloc();
@@ -228,21 +297,21 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
                     return ENOMEM;
                 }
                 memmove(curAlloc, curBuf->data, PGSIZE);
+                // Private case, release buffer
+                brelse(curBuf);
 
-            } else { // Else shared
+            } else { // Shared case
                 curAlloc = curBuf->data;
-                if (curAlloc == NULL) {
-                    #ifdef DEBUG_ERRORS
-                    pr_debug("INTERN-MMAP-ENOMEM: File Buffer get fail\n");
-                    #endif
-                    return ENOMEM;
-                }
             }
 
         }
 
-        if (flags & MAP_SHARED) {
-
+        // Insert into shared map
+        if (flags & MAP_SHARED) {    
+            // curBuf->data is never null
+            if(acquire_or_insert_table(curBuf, curAlloc) == -1) {
+                return ENOMEM;
+            }
         }
         
         // VA of our current page
@@ -292,10 +361,15 @@ uint64 __intern_munmap(void* addr, uint64 length) {
     uint64 intEntry = (uint64) *tableEntry;
 
     if (intEntry != 0 && (intEntry & PTE_V) && (intEntry & PTE_U) && (intEntry & PTE_MM)) {
-        // Invalidate mapping, freewalk will take care of the rest
-        uvmunmap(curTable, (uint64)addr, nPages, 1);
+        if (intEntry & PTE_SH) {
+            uvmunmap(curTable, (uint64)addr, nPages, munmap_shared(PTE2PA(intEntry)));
+        } else {
+            // Invalidate mapping, and free memory
+            uvmunmap(curTable, (uint64)addr, nPages, 1);
+        }
     } else {
         return EEXIST;
     }
+
     return 0;
 }

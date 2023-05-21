@@ -27,6 +27,7 @@ extern "C" {
 
 uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file* f, uint64 offset) ;
 uint64 __intern_munmap(void* addr, uint64 length);
+int64  munmap_shared(uint64 physicalAddr);
 
 typedef struct __map_shared_entry {
     // How many procs have mapped this page
