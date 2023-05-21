@@ -504,7 +504,7 @@ print_pt(pagetable_t pagetable, int lvl)
     return 0;
   }
   union debugpte_t {
-    pte_t table;
+    uint64 table;
     struct {
       union {
         uint64 flags : 10;
@@ -514,13 +514,15 @@ print_pt(pagetable_t pagetable, int lvl)
           uint64 write : 1;
           uint64 execute : 1;
           uint64 user : 1;
+          uint64 global : 1;
+          uint64 accessed : 1;
+          uint64 dirty : 1;
           uint64 mmap : 1;
-          uint64 writeback: 1;
-          uint64 unused : 3;
-        } bflags;
+          uint64 shared : 1;
+        };
       };
       uint64 rest : 54;
-    } debug;
+    };
   };
 
   for (int i = 0; i < 512; i++) {
@@ -530,10 +532,12 @@ print_pt(pagetable_t pagetable, int lvl)
       for (int i = 3; i >= lvl; i--) {
         pr_notice("%d:", i);
       }
-      pr_info("num:%d: %p, Flags: V:%d, R:%d, W:%d, X:%d, U:%d, MM:%d, WB:%d\n", 
-      i, entry.table, entry.debug.bflags.valid, entry.debug.bflags.read, 
-      entry.debug.bflags.write, entry.debug.bflags.execute, entry.debug.bflags.user,
-      entry.debug.bflags.mmap, entry.debug.bflags.writeback);
+
+      pr_info(" num:%d: %p, Flags: V:%d, R:%d, W:%d, X:%d, U:%d, G:%d, A:%d, D:%d, MM:%d, SH:%d\n",
+      i, entry.table, entry.valid, entry.read, 
+      entry.write, entry.execute, entry.user,
+      entry.global, entry.accessed, entry.dirty,
+      entry.mmap, entry.shared);
       print_pt((pagetable_t)PTE2PA(*pte), lvl - 1);
     }
     
