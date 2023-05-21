@@ -7,11 +7,11 @@
 
 struct {
     MapSharedEntry entries[SHARED_MAPPING_ENTRIES_NUM];
-    struct spinlock tableLock;
+    struct sleeplock tableLock;
 } shared_mappings_table;
 
 void init_mmap() {
-    initlock(&shared_mappings_table.tableLock, "mmap");
+    initsleeplock(&shared_mappings_table.tableLock, "mmap");
     for (int i = 0; i < SHARED_MAPPING_ENTRIES_NUM; i++) {
         shared_mappings_table.entries[i] = (MapSharedEntry){.physicalAddr=NULL, .refCount=0,.underlying_buf=NULL};
     }
@@ -53,13 +53,14 @@ int64 table_lookup(uint64 key, void* targetKey) {
  * return -1 on error, index on success
 */
 int64 acquire_or_insert_table(struct buf* underlying_buf,  void* physicalAddr) {
-    acquire(&shared_mappings_table.tableLock);
+    acquiresleep(&shared_mappings_table.tableLock);
     int64 pos = table_lookup((uint64)physicalAddr, physicalAddr);
 
     // If entry does not exist, make new one
     if (pos < 0) {
         pos = table_lookup((uint64)physicalAddr, NULL);
         if (pos < 0) {
+            releasesleep(&shared_mappings_table.tableLock);
             return -1;
         }
     }
@@ -69,15 +70,15 @@ int64 acquire_or_insert_table(struct buf* underlying_buf,  void* physicalAddr) {
     myEntry->physicalAddr = physicalAddr;
     myEntry->underlying_buf = underlying_buf;
 
-    release(&shared_mappings_table.tableLock);
+    releasesleep(&shared_mappings_table.tableLock);
     return pos;
 }
 
 /**
  * Returns 0 if memory should not be freed
 */
-int64 munmap_shared(uint64 physicalAddr) {
-    acquire(&shared_mappings_table.tableLock);
+int64 munmap_shared(uint64 physicalAddr, uint32 doWriteBack) {
+    acquiresleep(&shared_mappings_table.tableLock);
     int64 holeIndex = table_lookup(physicalAddr, (void*) physicalAddr);
     // Panic if entry not in table (required, if not: table broke)
     if (holeIndex < 0) {
@@ -90,9 +91,12 @@ int64 munmap_shared(uint64 physicalAddr) {
         currentEntry->physicalAddr = NULL;
         struct buf* entryBuf = currentEntry->underlying_buf;
         if (entryBuf != NULL) {
+            // doWriteBack is true if called from munmap and false if called from zombie cleanup (wait)
+            if (doWriteBack) {
+                bwrite(entryBuf);
+            }
             brelse(entryBuf);
         }
-
         // Loop through all successive entries until there's an empty one, and move the entries to their new position
         // There is always an empty entry, so (theoretically) no infinite loop here
         int64 curIndex = (holeIndex + 1) % SHARED_MAPPING_ENTRIES_NUM;
@@ -113,11 +117,12 @@ int64 munmap_shared(uint64 physicalAddr) {
 
         shared_mappings_table.entries[holeIndex] = (MapSharedEntry){.physicalAddr=NULL, .refCount=0, .underlying_buf=NULL};
 
-        // Never free a buffer!
-        release(&shared_mappings_table.tableLock);
+       
+        releasesleep(&shared_mappings_table.tableLock);
+        // Never free a buffer! 
         return copy.underlying_buf == NULL;
     }
-    release(&shared_mappings_table.tableLock);
+    releasesleep(&shared_mappings_table.tableLock);
     return 0;
 }
 
@@ -362,7 +367,7 @@ uint64 __intern_munmap(void* addr, uint64 length) {
 
     if (intEntry != 0 && (intEntry & PTE_V) && (intEntry & PTE_U) && (intEntry & PTE_MM)) {
         if (intEntry & PTE_SH) {
-            uvmunmap(curTable, (uint64)addr, nPages, munmap_shared(PTE2PA(intEntry)));
+            uvmunmap(curTable, (uint64)addr, nPages, munmap_shared(PTE2PA(intEntry), 1));
         } else {
             // Invalidate mapping, and free memory
             uvmunmap(curTable, (uint64)addr, nPages, 1);

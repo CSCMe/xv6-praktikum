@@ -301,7 +301,7 @@ uvmfreemmap(pagetable_t highestLevel, pagetable_t pagetable, uint64 constructedA
       // Free the mmap entry
       pr_debug("constructedAddr:%p\n", entryAddr);
       if (pte & PTE_SH) {
-        uvmunmap(highestLevel, entryAddr, 1, munmap_shared(PTE2PA(pte)));
+        uvmunmap(highestLevel, entryAddr, 1, munmap_shared(PTE2PA(pte), 0));
       } else {
         // Invalidate mapping, and free memory
         uvmunmap(highestLevel, entryAddr, 1, 1);
