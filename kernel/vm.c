@@ -299,14 +299,14 @@ uvmfreemmap(pagetable_t highestLevel, pagetable_t pagetable, uint64 constructedA
       // Address for this entry
       uint64 entryAddr = ((constructedAddr << 9) + i) << PGSHIFT;
       // Free the mmap entry
-      pr_debug("constructedAddr:%p\n", entryAddr);
+      // pr_debug("constructedAddr:%p\n", entryAddr);
       if (pte & PTE_SH) {
-        uvmunmap(highestLevel, entryAddr, 1, munmap_shared(PTE2PA(pte), 0));
+        int should_free = munmap_shared(PTE2PA(pte), 0);
+        uvmunmap(highestLevel, entryAddr, 1, should_free);
       } else {
         // Invalidate mapping, and free memory
         uvmunmap(highestLevel, entryAddr, 1, 1);
       }
-      pr_debug("done\n");
     }
   }
   return 0;
@@ -337,15 +337,25 @@ uint64 uvmcopymmap(pagetable_t new, pagetable_t old, pagetable_t curOld, uint64 
       uint64 entryVA = ((constructedAddr << 9) + i) << PGSHIFT;
       uint64 entryPA = PTE2PA(pte);
       uint64 entryFlags = PTE_FLAGS(pte);
-      // Copy this entry
-      void* newMemory = kalloc();
-      if (newMemory == NULL) {
-        return 1;
+
+      void* newMemory = (void*) entryPA;
+      // Add a new entry to the shared table if shared
+      if ((entryFlags & PTE_SH)) {
+        acquire_or_insert_table(NULL, newMemory);
+      } else {
+        // Copy this entry
+        newMemory = kalloc();
+        if (newMemory == NULL) {
+          return 1;
+        }
+        memmove(newMemory, (void*)entryPA, PGSIZE);
       }
-      memmove(newMemory, (void*)entryPA, PGSIZE);
+
       if(mappages(new, entryVA, PGSIZE, (uint64)newMemory, entryFlags) != 0){
         // If mapping fails at some point, free the entire Area
-        kfree(newMemory);
+        if (!(entryFlags & PTE_SH)) {
+          kfree(newMemory);
+        }
         uvmfreemmap(new, new, 0);
         return 2;
       }

@@ -13,6 +13,7 @@ extern "C" {
 #include "kernel/printk.h"
 // Flags and stuff is in here
 #include "uk-shared/mmap_defs.h"
+#include "kernel/buf.h"
 
 #define SHARED_MAPPING_ENTRIES_NUM 256
 
@@ -28,6 +29,7 @@ extern "C" {
 uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file* f, uint64 offset) ;
 uint64 __intern_munmap(void* addr, uint64 length);
 int64  munmap_shared(uint64 physicalAddr, uint32 doWriteBack);
+int64 acquire_or_insert_table(struct buf* underlying_buf,  void* physicalAddr);
 
 typedef struct __map_shared_entry {
     // How many procs have mapped this page
