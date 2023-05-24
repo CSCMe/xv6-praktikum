@@ -513,52 +513,71 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 }
 
 /**
- * Print an entire PT (lvl is the PTs level)
+ * Print a process PTs lowest entries
 */
 uint64
-print_pt(pagetable_t pagetable, int lvl)
+print_pt()
 {
-  if (lvl == 0) {
-    return 0;
-  }
+
   union debugpte_t {
     uint64 table;
     struct {
-      union {
-        uint64 flags : 10;
-        struct {
-          uint64 valid : 1;
-          uint64 read : 1;
-          uint64 write : 1;
-          uint64 execute : 1;
-          uint64 user : 1;
-          uint64 global : 1;
-          uint64 accessed : 1;
-          uint64 dirty : 1;
-          uint64 mmap : 1;
-          uint64 shared : 1;
-        };
-      };
-      uint64 rest : 54;
+      uint64 valid : 1;
+      uint64 read : 1;
+      uint64 write : 1;
+      uint64 execute : 1;
+      uint64 user : 1;
+      uint64 global : 1;
+      uint64 accessed : 1;
+      uint64 dirty : 1;
+      uint64 mmap : 1;
+      uint64 shared : 1;    
+      uint64 addr : 54;
     };
   };
+  pagetable_t pagetable = myproc()->pagetable;
+  for (int u = PX(3, 0); u < 512; u++) {
+    pte_t upper = pagetable[u];
+    if (!(upper & PTE_V))
+      continue;
+    for (int m = PX(2, 0); m < 512; m++) {
+      pte_t mid = ((pagetable_t)PTE2PA(upper))[m];
+      if (!(mid & PTE_V))
+        continue;
+      for (int l = PX(1, 0); l < 512; l++) {
+        pte_t low = ((pagetable_t)PTE2PA(mid))[l];
+        if (!(low & PTE_V))
+          continue;
+        union debugpte_t entry = {.table=low};
+        
+        {
+          // Ugly. Just ignore
+          if (u < 100)
+            pr_notice("0");
+          if (u < 10)
+            pr_notice("0");
+          pr_notice("%d.",u);
 
-  for (int i = 0; i < 512; i++) {
-    pte_t *pte = &pagetable[i];
-    if (*pte & PTE_V) {
-      union debugpte_t entry = {.table=pagetable[i]};
-      for (int i = 3; i >= lvl; i--) {
-        pr_notice("%d:", i);
+          if (m < 100)
+            pr_notice("0");
+          if (m < 10)
+            pr_notice("0");
+          pr_notice("%d.",m);
+
+          if (l < 100)
+            pr_notice("0");
+          if (l < 10)
+            pr_notice("0");
+          pr_notice("%d: ",l);
+        }
+        
+        pr_info("%p, Flags: V:%d, R:%d, W:%d, X:%d, U:%d, G:%d, A:%d, D:%d, MM:%d, SH:%d\n",
+        entry.addr, entry.valid, entry.read, 
+        entry.write, entry.execute, entry.user,
+        entry.global, entry.accessed, entry.dirty,
+        entry.mmap, entry.shared);
       }
-
-      pr_info(" num:%d: %p, Flags: V:%d, R:%d, W:%d, X:%d, U:%d, G:%d, A:%d, D:%d, MM:%d, SH:%d\n",
-      i, entry.table, entry.valid, entry.read, 
-      entry.write, entry.execute, entry.user,
-      entry.global, entry.accessed, entry.dirty,
-      entry.mmap, entry.shared);
-      print_pt((pagetable_t)PTE2PA(*pte), lvl - 1);
     }
-    
   }
   return 0;
 }

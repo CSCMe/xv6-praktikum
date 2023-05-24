@@ -256,7 +256,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
 
     #ifdef DEBUG_PT
     pr_debug("Start: ");
-    print_pt(curTable, 3);
+    print_pt();
     #endif
 
     // Contiguous pages required
@@ -344,7 +344,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
 
     #ifdef DEBUG_PT
     pr_debug("Result: %p: \n", base);
-    print_pt(curTable, 3);
+    print_pt();
     #endif
 
     return (uint64)base;

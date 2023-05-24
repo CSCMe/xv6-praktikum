@@ -45,7 +45,7 @@ sys_sbrk(void)
 uint64
 sys_printPT(void)
 {
-  print_pt(myproc()->pagetable , 3);
+  print_pt();
   return 0;
 }
 
