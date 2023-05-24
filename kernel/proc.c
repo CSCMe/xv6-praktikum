@@ -157,6 +157,7 @@ freeproc(struct proc *p)
     proc_freepagetable(p->pagetable, p->sz);
   p->pagetable = 0;
   p->sz = 0;
+  p->last_mmap=0;
   p->pid = 0;
   p->parent = 0;
   p->name[0] = 0;
@@ -236,6 +237,7 @@ userinit(void)
   // and data into it.
   uvmfirst(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
+  p->last_mmap = MMAP_MIN_ADDR;
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -290,6 +292,7 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
+  np->last_mmap = p->last_mmap;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);

@@ -536,15 +536,15 @@ print_pt()
     };
   };
   pagetable_t pagetable = myproc()->pagetable;
-  for (int u = PX(3, 0); u < 512; u++) {
+  for (int u = 0; u < 512; u++) {
     pte_t upper = pagetable[u];
     if (!(upper & PTE_V))
       continue;
-    for (int m = PX(2, 0); m < 512; m++) {
+    for (int m = 0; m < 512; m++) {
       pte_t mid = ((pagetable_t)PTE2PA(upper))[m];
       if (!(mid & PTE_V))
         continue;
-      for (int l = PX(1, 0); l < 512; l++) {
+      for (int l = 0; l < 512; l++) {
         pte_t low = ((pagetable_t)PTE2PA(mid))[l];
         if (!(low & PTE_V))
           continue;

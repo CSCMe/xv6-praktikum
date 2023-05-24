@@ -2,8 +2,10 @@
 #include "kernel/memlayout.h"
 #include "kernel/printk.h"
 #include "kernel/buf.h"
-
 // There are important things in riscv.h
+
+//#define DEBUG_ERRORS
+//#define DEBUG_PRECON
 
 struct {
     MapSharedEntry entries[SHARED_MAPPING_ENTRIES_NUM];
@@ -128,57 +130,75 @@ int64 munmap_shared(uint64 physicalAddr, uint32 doWriteBack) {
     return 0;
 }
 
+
+#define CONSTRUCT_VIRT_FROM_PT_INDICES(high, mid, low) (( (((((high) << 9) + (mid)) << 9) + (low))) << 12)
 /**
  * Goes through the page table starting at addr baseAddr
  * fixed is true if MAP_FIXED was passed (meaning we deffo allocate at baseAddr unless there's a kernel page here)
 */
 uint64 mmap_find_free_area(pagetable_t table, uint64 required_pages, uint64 baseAddr, int fixed, int noOverwrite) {
 
-    int working = 1;
-    int pageIssue = 0;
-    while (working) {
-        pageIssue = 0;
-        for(int i = 0; i < required_pages; i++) {
-            if (baseAddr + (i * PGSIZE) > MAXVA) {
-                if (fixed) {
-                    return ENOMEM;
-                }
-                // If we reach max, just go to min again?
-                baseAddr = (uint64)MMAP_MIN_ADDR;
+    uint64 contig_pages = 0;
+    uint64 upBase = PX(2, baseAddr);
+    uint64 midBase = PX(1, baseAddr);
+    uint64 lowBase = PX(0, baseAddr);
+    uint64 returnAddr = baseAddr;
+
+    // Recursion was also an option. Why not choose that?
+    // Top level only has 256 entries
+    for (uint64 u = upBase; u < 256 && contig_pages < required_pages; u++) {
+        pte_t upper = table[u];
+        if (!(upper & PTE_V)) {
+            contig_pages += 512*512;
+            if (returnAddr == 0)
+                returnAddr = CONSTRUCT_VIRT_FROM_PT_INDICES(u, 0, 0);
+            continue;
+        }
+
+        for (uint64 m = (u == upBase) ? midBase : 0; m < 512 && contig_pages < required_pages; m++) {
+            pte_t mid = ((pagetable_t)PTE2PA(upper))[m];
+            if (!(mid & PTE_V)) {
+                contig_pages += 512;
+                if (returnAddr == 0)
+                    returnAddr =  CONSTRUCT_VIRT_FROM_PT_INDICES(u,m,0);
+                continue;
             }
-            // Gets entry
-            pte_t* entry = walk(table, baseAddr + (i * PGSIZE), 0);
-            
-            // This entry is a valid entry
-            if (entry && *entry & PTE_V) {
-                // We don't want to use this specific address anyways, check next best
-                if (!fixed) {
-                    baseAddr += (i + 1) * PGSIZE;
-                    pageIssue = 1;
-                    break;
-                }  
-                // But wait, we don't want to overwrite
-                else if(noOverwrite) {
-                    return EEXIST;
-                }
-                // We want to overwrite, addr is not a hint, if it's not a user page return ERROR
-                else if (!(*entry & PTE_U)){
-                    return ENOMEM;
-                }
-                
+
+            for (uint64 l = (u == upBase && m == midBase) ? lowBase : 0; l < 512 && contig_pages < required_pages; l++) {
+                pte_t low = ((pagetable_t)PTE2PA(mid))[l];
+                if (low & PTE_V) {
+                    if ((fixed && noOverwrite) || (fixed && !(low & PTE_U))) {
+                        // There is already an existing mapping we don't want to overwrite
+                        return EEXIST;
+                    } else if (!fixed){
+                        contig_pages = 0;
+                        returnAddr = 0;
+                        continue;
+                    }
+                    // Case fixed && PTE_U, fall through
+                } 
+                contig_pages++;
+                if (returnAddr == 0)
+                    returnAddr = CONSTRUCT_VIRT_FROM_PT_INDICES(u,m,l);
             }
         }
-        working = pageIssue;
     }
-    // We get here after somehow exiting the while loop
-    return baseAddr;
+
+    if (contig_pages >= required_pages) {
+        return returnAddr;
+    }
+
+    return ENOMEM;
 }
 
 /**
  * Precondition checking
 */
 uint64 is_valid_addr(uint64 addr) {
-    return (addr % PGSIZE == 0) && ((void*)addr == NULL || addr >= (uint64)MMAP_MIN_ADDR) && (addr < MAXVA);
+    #ifdef DEBUG_PRECON
+    pr_debug("%d, %d, %d, %d\n", (addr % PGSIZE == 0), (void*)addr == NULL, (addr >= (uint64)MMAP_MIN_ADDR), (addr < MAXVA));
+    #endif
+    return (addr % PGSIZE == 0) && ((void*)addr == NULL || ((addr >= (uint64)MMAP_MIN_ADDR) && (addr < MAXVA)));
 }
 
 struct buf* get_nth_buffer_from_file(uint64 n, struct file* f) {
@@ -205,10 +225,6 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         pr_debug("INTERN-MMAP-EINVAL");
         #endif
         return EINVAL;
-    }
-
-    if (addr == NULL) {
-        addr = MMAP_MIN_ADDR;
     }
 
     // Check if file perm are valid
@@ -250,9 +266,15 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         entryProt |= PTE_SH;
     }
 
+    struct proc* proc = myproc();
+
+    if (addr < MMAP_MIN_ADDR) {
+        addr = proc->last_mmap;
+    }
+
     // Here begins actual mapping
 
-    pagetable_t curTable = mycpu()->proc->pagetable;
+    pagetable_t curTable = proc->pagetable;
 
     #ifdef DEBUG_PT
     pr_debug("Start: ");
@@ -346,7 +368,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
     pr_debug("Result: %p: \n", base);
     print_pt();
     #endif
-
+    proc->last_mmap = (void*) base;
     return (uint64)base;
 }
 

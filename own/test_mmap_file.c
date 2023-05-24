@@ -1,8 +1,17 @@
 #include "user/mmap.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
+#define CONSTRUCT_VIRT_FROM_PT_INDICES(high, mid, low) (( (((((high) << 9) + (mid)) << 9) + (low))) << 12)
 
-void main (int argc, char** argv) {
+void main(int argc, char** argv) {
+    void* addr = (void*)(((((28L << 9) + 12L) << 9) + 4L) << 12);
+    void* val = mmap(addr, PAGE_SIZE, PROT_WRITE| PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* val2 = mmap(addr, PAGE_SIZE, PROT_WRITE| PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    printf("addr:%p, v:%p,V2:%p, con:%p\n", addr, val, val2, CONSTRUCT_VIRT_FROM_PT_INDICES(28L,12L,4L));
+    printPT();
+}
+
+void aaahmain (int argc, char** argv) {
     int fd = open("README", O_RDWR);
     void* pointer;
     void* preshared = mmap(NULL, PAGE_SIZE, PROT_READ |PROT_WRITE, MAP_SHARED |MAP_ANON, -1 ,0);
