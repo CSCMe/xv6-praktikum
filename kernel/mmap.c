@@ -289,7 +289,13 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
 
     // Happens when various errors are returned
     if (base < (uint64)MMAP_MIN_ADDR) {
-        return base;
+        // Couldn't find memory. Try again with addr = MIN_MMAP
+        if (base == ENOMEM && !(flags & MAP_FIXED || flags & MAP_FIXED_NOREPLACE)) {
+            base = mmap_find_free_area(curTable, required_pages, (uint64) MMAP_MIN_ADDR, 0, 0);
+        }
+        if (base < (uint64)MMAP_MIN_ADDR) {
+            return base;
+        }
     }
 
     // go through the pages and map them

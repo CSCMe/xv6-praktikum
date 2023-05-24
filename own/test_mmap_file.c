@@ -4,10 +4,11 @@
 #define CONSTRUCT_VIRT_FROM_PT_INDICES(high, mid, low) (( (((((high) << 9) + (mid)) << 9) + (low))) << 12)
 
 void main(int argc, char** argv) {
-    void* addr = (void*)(((((28L << 9) + 12L) << 9) + 4L) << 12);
-    void* val = mmap(addr, PAGE_SIZE, PROT_WRITE| PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    void* val2 = mmap(addr, PAGE_SIZE, PROT_WRITE| PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    printf("addr:%p, v:%p,V2:%p, con:%p\n", addr, val, val2, CONSTRUCT_VIRT_FROM_PT_INDICES(28L,12L,4L));
+    void* addr = (void*)(((((255 << 9) + 511L) << 9) + 507L) << 12);
+    void* val = mmap(addr, PAGE_SIZE * 3, PROT_WRITE| PROT_READ, MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* val2 = mmap(addr, PAGE_SIZE * 3, PROT_WRITE| PROT_READ, MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void* val3 = mmap(addr, PAGE_SIZE * 3, PROT_WRITE| PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    printf("addr:%p, v:%p,V2:%p,v3:%p ,con:%p\n", addr, val, val2, val3,CONSTRUCT_VIRT_FROM_PT_INDICES(28L,12L,4L));
     printPT();
 }
 
