@@ -389,7 +389,7 @@ uint64 __intern_munmap(void* addr, uint64 length) {
 
     uint64 nPages = PGROUNDUP(length) / PGSIZE;
 
-    pagetable_t curTable = mycpu()->proc->pagetable;
+    pagetable_t curTable = myproc()->pagetable;
 
     // Find the appropriate entry
     pte_t* tableEntry = walk(curTable, (uint64)addr, 0);
