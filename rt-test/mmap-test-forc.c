@@ -60,12 +60,12 @@ void main (int arg, char** argv) {
 
     // Tesst with lotsa repetitions, should not run out of kernel or shared memory
     for (int i = 1; i < 2000; i++) {
-        void* addr1 = mmap(NULL, ((i % 511) + 1) * PAGE_SIZE, PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-        void* addr2 = mmap(NULL, ((i % 511) + 1) * PAGE_SIZE, PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        void* addr1 = mmap(NULL, ((i % 255) + 1) * PAGE_SIZE, PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        void* addr2 = mmap(NULL, ((i % 255) + 1) * PAGE_SIZE, PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
         assert(addr1 != MAP_FAILED);
         assert(addr2 != MAP_FAILED);
         assert(addr1 != addr2);
-        assert(munmap(addr1, ((i % 511) + 1) * PAGE_SIZE) != (uint64)MAP_FAILED);
-        assert(munmap(addr2, ((i % 511) + 1) * PAGE_SIZE) != (uint64)MAP_FAILED);
+        assert(munmap(addr1, ((i % 255) + 1) * PAGE_SIZE) != (uint64)MAP_FAILED);
+        assert(munmap(addr2, ((i % 255) + 1) * PAGE_SIZE) != (uint64)MAP_FAILED);
     }
 }
