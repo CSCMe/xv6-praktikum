@@ -6,6 +6,7 @@
 
 //#define DEBUG_ERRORS
 //#define DEBUG_PRECON
+//#define DEBUG_SHARED_TABLE
 
 struct {
     MapSharedEntry entries[SHARED_MAPPING_ENTRIES_NUM];
@@ -33,6 +34,14 @@ uint64 hash_function(uint64 key) {
 }
 
 
+void debug_shared_mappings_table() {
+    pr_debug("Printing Map-Shared-Table\n");
+    for (int i = 0; i < SHARED_MAPPING_ENTRIES_NUM; i++) {
+        pr_debug("%d: k:%d,  pA:%p, uB:%p, refs:%d\n", i, hash_function((uint64)shared_mappings_table.entries[i].physicalAddr),shared_mappings_table.entries[i].physicalAddr, shared_mappings_table.entries[i].underlying_buf, shared_mappings_table.entries[i].refCount);
+    }
+}
+
+
 /**
  * Search the table for an entry with the specified targetKey, uses key in the hash function
  * Returns -1 on failure, index on success
@@ -41,11 +50,12 @@ int64 table_lookup(uint64 key, void* targetKey) {
     uint64 result = hash_function(key);
     uint64 count = 0;
     while (shared_mappings_table.entries[result].physicalAddr != targetKey) {
-        result = (result + 1) % SHARED_MAPPING_ENTRIES_NUM;
         count++;
-        if (count == SHARED_MAPPING_ENTRIES_NUM) {
+        // If we either iterated over the entire table or met a NULL entry (and aren't looking for a NULL entry) we bail
+        if (count == SHARED_MAPPING_ENTRIES_NUM || shared_mappings_table.entries[result].physicalAddr == NULL) {
             return -1;
         }
+        result = (result + 1) % SHARED_MAPPING_ENTRIES_NUM;
     }
     return result;
 }
@@ -86,30 +96,44 @@ int64 munmap_shared(uint64 physicalAddr, uint32 doWriteBack) {
     int64 holeIndex = table_lookup(physicalAddr, (void*) physicalAddr);
     // Panic if entry not in table (required, if not: table broke)
     if (holeIndex < 0) {
+        #ifdef DEBUG_ERRORS
+        pr_emerg("PANIC: %p\n", physicalAddr);
+        debug_shared_mappings_table();
+        #endif
         panic("munmap-shared");
     }
     // Remove current entry
     MapSharedEntry copy = shared_mappings_table.entries[holeIndex];
     MapSharedEntry* currentEntry = shared_mappings_table.entries + holeIndex;
+    #ifdef DEBUG_SHARED_TABLE
+    pr_info("Unmapping: %p\n", physicalAddr);
+    debug_shared_mappings_table();
+    #endif
     if ((--(currentEntry->refCount)) == 0) {
         currentEntry->physicalAddr = NULL;
         struct buf* entryBuf = currentEntry->underlying_buf;
         // Loop through all successive entries until there's an empty one, and move the entries to their new position
         // There is always an empty entry, so (theoretically) no infinite loop here
-        int64 curIndex = (holeIndex + 1) % SHARED_MAPPING_ENTRIES_NUM;
-        int64 holeDistance = 1;
+        // uint64 so distance is not negative => wraparound case works. Might still be bugged in unknown ways
+        uint64 curIndex = (holeIndex + 1) % SHARED_MAPPING_ENTRIES_NUM;
+        uint64 holeDistance = 1;
         // See for wraparound case explanation: https://cs.stackexchange.com/a/60198
         while ((currentEntry = shared_mappings_table.entries + curIndex)->physicalAddr != NULL) {
             int64 shouldBeIndex = hash_function((uint64)currentEntry->physicalAddr);
             int64 distance = (curIndex - shouldBeIndex) % SHARED_MAPPING_ENTRIES_NUM;
+
             // Inspired by: https://github.com/leventov/Koloboke/blob/68515672575208e68b61fadfabdf68fda599ed5a/benchmarks/research/src/main/javaTemplates/com/koloboke/collect/research/hash/NoStatesLHashCharSet.java#L194-L212
             if (distance >= holeDistance) {
                 shared_mappings_table.entries[holeIndex] = shared_mappings_table.entries[curIndex];
+                // Actually NULL our entry so our break condition works
+                shared_mappings_table.entries[curIndex] = (MapSharedEntry){.physicalAddr=NULL,.refCount=0,.underlying_buf=NULL};
                 holeIndex = curIndex;
                 holeDistance = 1;
             } else {
                 holeDistance++;
             }
+            // Actually increasing curIndex now. Should fix inifinite loop
+            curIndex = (curIndex + 1) % SHARED_MAPPING_ENTRIES_NUM;
         }
 
         shared_mappings_table.entries[holeIndex] = (MapSharedEntry){.physicalAddr=NULL, .refCount=0, .underlying_buf=NULL};
@@ -168,6 +192,9 @@ uint64 mmap_find_free_area(pagetable_t table, uint64 required_pages, uint64 base
                 pte_t low = ((pagetable_t)PTE2PA(mid))[l];
                 if (low & PTE_V) {
                     if ((fixed && noOverwrite) || (fixed && !(low & PTE_U))) {
+                        #ifdef DEBUG_ERRORS
+                        pr_debug("ERROR-EEXIST: f:%d, nO:%d, base:%p, cur:%p\n", fixed, noOverwrite, baseAddr, CONSTRUCT_VIRT_FROM_PT_INDICES(u,m,l));
+                        #endif
                         // There is already an existing mapping we don't want to overwrite
                         return EEXIST;
                     } else if (!fixed){
@@ -196,7 +223,7 @@ uint64 mmap_find_free_area(pagetable_t table, uint64 required_pages, uint64 base
 */
 uint64 is_valid_addr(uint64 addr) {
     #ifdef DEBUG_PRECON
-    pr_debug("%d, %d, %d, %d\n", (addr % PGSIZE == 0), (void*)addr == NULL, (addr >= (uint64)MMAP_MIN_ADDR), (addr < MAXVA));
+    pr_debug("%d && (%d || (%d && %d)\n", (addr % PGSIZE == 0), (void*)addr == NULL, (addr >= (uint64)MMAP_MIN_ADDR), (addr < MAXVA));
     #endif
     return (addr % PGSIZE == 0) && ((void*)addr == NULL || ((addr >= (uint64)MMAP_MIN_ADDR) && (addr < MAXVA)));
 }
@@ -311,7 +338,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
             if (curAlloc == NULL) {
                 // kernel malloc error
                 #ifdef DEBUG_ERRORS
-                pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed\n");
+                pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed: i:%d, req:%d\n", i ,required_pages);
                 #endif
                 return ENOMEM;
             }
@@ -345,6 +372,12 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         if (flags & MAP_SHARED) {    
             // curBuf->data is never null
             if(acquire_or_insert_table(curBuf, curAlloc) == -1) {
+                #ifdef DEBUG_ERRORS
+                pr_notice("Table insert failed for %p with key %d\n", curAlloc, hash_function((uint64) curAlloc));
+                #if defined(DEBUG_SHARED_TABLE) || defined(DEBUG_ERRORS)
+                debug_shared_mappings_table();
+                #endif
+                #endif
                 return ENOMEM;
             }
         }
@@ -387,25 +420,31 @@ uint64 __intern_munmap(void* addr, uint64 length) {
         return 0;
     }
 
-    uint64 nPages = PGROUNDUP(length) / PGSIZE;
+    // >= or >? Who knows, won't be relevant as highest pages are reserved by kernel
+    if (((uint64)addr + length) >= MAXVA) {
+        return EINVAL;
+    }
 
     pagetable_t curTable = myproc()->pagetable;
 
-    // Find the appropriate entry
-    pte_t* tableEntry = walk(curTable, (uint64)addr, 0);
-    uint64 intEntry = (uint64) *tableEntry;
+    void* startAddr = addr;
+    // Every single page in this range will be unmapped
+    // munmap docs: It is not an error if the indicated range does not contain any mapped pages.
+    for (; addr < startAddr + length; addr += PGSIZE) {
+        pte_t* tableEntry = walk(curTable, (uint64)addr, 0);
+        uint64 intEntry = (uint64) *tableEntry;
 
-    if (intEntry != 0 && (intEntry & PTE_V) && (intEntry & PTE_U) && (intEntry & PTE_MM)) {
-        if (intEntry & PTE_SH) {
-            int should_free = munmap_shared(PTE2PA(intEntry), 1);
-            uvmunmap(curTable, (uint64)addr, nPages, should_free);
-        } else {
-            // Invalidate mapping, and free memory
-            uvmunmap(curTable, (uint64)addr, nPages, 1);
+        if (intEntry != 0 && (intEntry & PTE_V) && (intEntry & PTE_U) && (intEntry & PTE_MM)) {
+            if (intEntry & PTE_SH) {
+                int should_free = munmap_shared(PTE2PA(intEntry), 1);
+                uvmunmap(curTable, (uint64)addr, 1, should_free);
+            } else {
+                // Invalidate mapping, and free memory
+                uvmunmap(curTable, (uint64)addr, 1, 1);
+            }
         }
-    } else {
-        return EEXIST;
     }
+
 
     return 0;
 }

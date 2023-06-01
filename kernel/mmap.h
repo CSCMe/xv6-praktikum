@@ -15,7 +15,7 @@ extern "C" {
 #include "uk-shared/mmap_defs.h"
 #include "kernel/buf.h"
 
-#define SHARED_MAPPING_ENTRIES_NUM 256
+#define SHARED_MAPPING_ENTRIES_NUM 512  // Can share up to 512*4096 = 2MB, should be enough
 
 /* Error codes */
 #define EPERM  0x1    // Permission error

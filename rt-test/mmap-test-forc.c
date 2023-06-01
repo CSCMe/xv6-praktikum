@@ -27,8 +27,8 @@ void main (int arg, char** argv) {
         *((char*) val) = 5;
         // And unmaps two pages
         assert(munmap(val, 2 * PAGE_SIZE) == 0);
-        // Tries again, should fail
-        assert(munmap(val, 2 * PAGE_SIZE) == (int) (uint64) MAP_FAILED);
+        // Tries again, should succeed cuz "It is not an error if the indicated range does not contain any mapped pages."
+        assert(munmap(val, 2 * PAGE_SIZE) == 0);
         // Should succeed on last page, cuz that one wasn't unmapped
         assert(munmap(val + 2 * PAGE_SIZE, PAGE_SIZE) == 0);
 
@@ -48,12 +48,24 @@ void main (int arg, char** argv) {
     // Child pages should still be mapped, unmap for realz
     assert(munmap(val + PAGE_SIZE, 2 * PAGE_SIZE) == 0);
 
-    // Tries again, should fail
-    assert(munmap(val + PAGE_SIZE, 2 * PAGE_SIZE) ==  (int) (uint64) MAP_FAILED);
+    // Tries again, should succeed because "It is not an error if the indicated range does not contain any mapped pages.""
+    
+    assert(munmap(val + PAGE_SIZE, 2 * PAGE_SIZE) == 0);
 
     // This shouldn't fail
     *((uint64*) shared + 8) = 52;
     assert(*((uint64*) shared) == -5);
 
     assert(munmap(shared, PAGE_SIZE) == 0);
+
+    // Tesst with lotsa repetitions, should not run out of kernel or shared memory
+    for (int i = 1; i < 2000; i++) {
+        void* addr1 = mmap(NULL, ((i % 511) + 1) * PAGE_SIZE, PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        void* addr2 = mmap(NULL, ((i % 511) + 1) * PAGE_SIZE, PROT_READ, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+        assert(addr1 != MAP_FAILED);
+        assert(addr2 != MAP_FAILED);
+        assert(addr1 != addr2);
+        assert(munmap(addr1, ((i % 511) + 1) * PAGE_SIZE) != (uint64)MAP_FAILED);
+        assert(munmap(addr2, ((i % 511) + 1) * PAGE_SIZE) != (uint64)MAP_FAILED);
+    }
 }
