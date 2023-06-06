@@ -76,3 +76,36 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
 }
+
+/**
+ * Using __uint128_t extends to
+ *  80000be8:	00053023          	sd	zero,0(a0)
+ *  80000bec:	00053423          	sd	zero,8(a0)
+ * Where a0 is start (or start + i)
+ * which is marginaly faster than using uint64 (which loops after every sd instruction), 
+ * but also the fastest way other than explicitely writing 512 sd zero instruction
+*/
+void
+fast_page_zero(__uint128_t* start) 
+{
+  for (int i = 0; i < PGSIZE / sizeof(__uint128_t); i++) {
+    *(start + i) = 0;
+  }
+}
+
+void*
+kalloc_zero(void)
+{
+  struct run *r;
+
+  acquire(&kmem.lock);
+  r = kmem.freelist;
+  if(r)
+    kmem.freelist = r->next;
+  release(&kmem.lock);
+
+  if(r)
+    fast_page_zero((__uint128_t*) r); //zero the page
+    //memset((char*)r, 5, PGSIZE); // zero the page
+  return (void*)r;
+}

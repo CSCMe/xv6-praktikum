@@ -16,8 +16,7 @@ kvmmake(void)
 {
   pagetable_t kpgtbl;
 
-  kpgtbl = (pagetable_t) kalloc();
-  memset(kpgtbl, 0, PGSIZE);
+  kpgtbl = (pagetable_t) kalloc_zero();
 
   // uart registers
   kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
@@ -88,9 +87,8 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
     if(*pte & PTE_V) {
       pagetable = (pagetable_t)PTE2PA(*pte);
     } else {
-      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
+      if(!alloc || (pagetable = (pde_t*)kalloc_zero()) == 0)
         return 0;
-      memset(pagetable, 0, PGSIZE);
       *pte = PA2PTE(pagetable) | PTE_V;
     }
   }
@@ -193,10 +191,9 @@ pagetable_t
 uvmcreate()
 {
   pagetable_t pagetable;
-  pagetable = (pagetable_t) kalloc();
+  pagetable = (pagetable_t) kalloc_zero();
   if(pagetable == 0)
     return 0;
-  memset(pagetable, 0, PGSIZE);
   return pagetable;
 }
 
@@ -210,8 +207,7 @@ uvmfirst(pagetable_t pagetable, uchar *src, uint sz)
 
   if(sz >= PGSIZE)
     panic("uvmfirst: more than a page");
-  mem = kalloc();
-  memset(mem, 0, PGSIZE);
+  mem = kalloc_zero();
   mappages(pagetable, 0, PGSIZE, (uint64)mem, PTE_W|PTE_R|PTE_X|PTE_U);
   memmove(mem, src, sz);
 }
@@ -229,12 +225,11 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
 
   oldsz = PGROUNDUP(oldsz);
   for(a = oldsz; a < newsz; a += PGSIZE){
-    mem = kalloc();
+    mem = kalloc_zero();
     if(mem == 0){
       uvmdealloc(pagetable, a, oldsz);
       return 0;
     }
-    memset(mem, 0, PGSIZE);
     if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_R|PTE_U|xperm) != 0){
       kfree(mem);
       uvmdealloc(pagetable, a, oldsz);

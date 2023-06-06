@@ -331,9 +331,9 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         
         void* curAlloc;
         struct buf* curBuf = NULL;
-        // We might need to pre-0 the pages, kernel memset uses physical addresses
+        // We might need to use pre-0ed pages
         if (flags & MAP_ANONYMOUS) {
-            curAlloc = kalloc();
+            curAlloc = kalloc_zero();
 
             if (curAlloc == NULL) {
                 // kernel malloc error
@@ -342,7 +342,6 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
                 #endif
                 return ENOMEM;
             }
-            memset((void*)curAlloc, 0, PGSIZE);
         }
         else {
             // Get file backed mapping
