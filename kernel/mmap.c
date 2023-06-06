@@ -4,7 +4,7 @@
 #include "kernel/buf.h"
 // There are important things in riscv.h
 
-//#define DEBUG_ERRORS
+#define DEBUG_ERRORS
 //#define DEBUG_PRECON
 //#define DEBUG_SHARED_TABLE
 
@@ -190,7 +190,7 @@ uint64 mmap_find_free_area(pagetable_t table, uint64 required_pages, uint64 base
 
             for (uint64 l = (u == upBase && m == midBase) ? lowBase : 0; l < 512 && contig_pages < required_pages; l++) {
                 pte_t low = ((pagetable_t)PTE2PA(mid))[l];
-                if (low & PTE_V) {
+                if (low & PTE_V || low & PTE_MM) { // Either a valid entry or one that is soon to be valid
                     if ((fixed && noOverwrite) || (fixed && !(low & PTE_U))) {
                         #ifdef DEBUG_ERRORS
                         pr_debug("ERROR-EEXIST: f:%d, nO:%d, base:%p, cur:%p\n", fixed, noOverwrite, baseAddr, CONSTRUCT_VIRT_FROM_PT_INDICES(u,m,l));
@@ -236,6 +236,27 @@ struct buf* get_nth_buffer_from_file(uint64 n, struct file* f) {
     struct buf* bp = bread(f->ip->dev, addr);
     iunlock(f->ip);
     return bp;
+}
+
+void populate_mmap_page(void* addr) {
+    if ((uint64)addr % 4096 != 0) 
+        panic("mmap populate");
+
+    uint64 curAlloc = (uint64) kalloc_zero();
+    /* mmap manpage says ignore kalloc errors            
+    if (curAlloc == NULL) {
+        // kernel malloc error
+        #ifdef DEBUG_ERRORS
+            pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed: i:%d, req:%d\n", i ,required_pages);
+        #endif
+        return ENOMEM;
+    }*/
+    // Validates mapping
+    pte_t* entry = walk(myproc()->pagetable, curAlloc, 1);
+    // Bits other than permission should be 0, are now address
+    *entry |= PA2PTE(curAlloc);
+    // Mark entry as valid
+    *entry |= PTE_V;
 }
 
 /**
@@ -284,12 +305,13 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
     if (prot & PROT_EXEC)
         entryProt |= PTE_X;
 
-    if (!(flags & MAP_POPULATE)) {
+    if ((flags & MAP_ANON)) {
         // We shall ignore this for now
     }
 
-    // MAP_SHARED sets PTE_SH page bit
+    // MAP_SHARED sets PTE_SH page bit & IMPLIES MAP_POPULATE
     if (flags & MAP_SHARED) {
+        flags |= MAP_POPULATE;
         entryProt |= PTE_SH;
     }
 
@@ -331,19 +353,9 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         
         void* curAlloc;
         struct buf* curBuf = NULL;
-        // We might need to use pre-0ed pages
-        if (flags & MAP_ANONYMOUS) {
-            curAlloc = kalloc_zero();
 
-            if (curAlloc == NULL) {
-                // kernel malloc error
-                #ifdef DEBUG_ERRORS
-                pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed: i:%d, req:%d\n", i ,required_pages);
-                #endif
-                return ENOMEM;
-            }
-        }
-        else {
+        // We need to populate the page and it's not anonymous
+        if (flags & MAP_POPULATE && !(flags & MAP_ANON)) {
             // Get file backed mapping
             curBuf = get_nth_buffer_from_file(i + (offset / PGSIZE), f);
             // private file backed mappings are simple copies that aren't reflected on the actual file
@@ -364,7 +376,12 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
             } else { // Shared case
                 curAlloc = curBuf->data;
             }
-
+        } else if (flags & MAP_POPULATE && flags & MAP_ANON){ // page is anon and populated
+            curAlloc = kalloc_zero();
+            // MAP_POPULATE ignores kalloc erros (for some reason)
+        } else { // Not populate && anon. Demand paging time
+            curAlloc = NULL;
+            pr_debug("virt demand:%p\n", base + (i * PGSIZE));
         }
 
         // Insert into shared map
@@ -384,20 +401,18 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         // VA of our current page
         uint64 curVA = base + (i * PGSIZE);
 
-        // Goes through the table and gets old entries
-        pte_t* prevEntry = walk(curTable, curVA, 1);
-        if (*prevEntry != 0) {
-            // dofree for now, MAP_SHARED might be a problem
-            uvmunmap(curTable, curVA, 1, 1);
-        }
 
-        uint64 mapR = mappages(curTable, curVA, PGSIZE, (uint64)curAlloc, entryProt);
-        // Return if mappages failed
-        if (mapR) {
-            #ifdef DEBUG_ERRORS
-            pr_debug("INTERN-MMAP-ENOMEM: mappages fail\n");
-            #endif
-            return ENOMEM;
+        // Gets an old entry at this location and frees & invalidates it
+        pte_t* entry = walk(curTable, curVA, 1);
+        if (*entry != 0) {
+            __intern_munmap((void*) curVA, PGSIZE);
+            *entry = 0;
+        }
+        // entry is now a pte we want. Set its flags (and address if MAP_POPULATE is set)
+        *entry |= entryProt;
+        if (flags & MAP_POPULATE) {
+            *entry |= PTE_V;
+            *entry |= PA2PTE(curAlloc);
         }
 
     }
