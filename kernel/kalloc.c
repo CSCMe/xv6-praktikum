@@ -35,6 +35,18 @@ freerange(void *pa_start, void *pa_end)
     kfree(p);
 }
 
+/**
+ * Uses uint64 instead of chars for a 10x speedup
+*/
+void
+fast_page_memset(uint64* start, uint64 content) 
+{
+  for (int i = 0; i < PGSIZE / sizeof(uint64); i++) {
+    *(start + i) = content;
+  }
+}
+
+
 // Free the page of physical memory pointed at by pa,
 // which normally should have been returned by a
 // call to kalloc().  (The exception is when
@@ -48,7 +60,7 @@ kfree(void *pa)
     panic("kfree");
 
   // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
+  fast_page_memset((uint64*)pa, 0x0101010101010101);
 
   r = (struct run*)pa;
 
@@ -73,24 +85,8 @@ kalloc(void)
   release(&kmem.lock);
 
   if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk
+   fast_page_memset((uint64*)r, 0x0505050505050505); // fill with junk
   return (void*)r;
-}
-
-/**
- * Using __uint128_t extends to
- *  80000be8:	00053023          	sd	zero,0(a0)
- *  80000bec:	00053423          	sd	zero,8(a0)
- * Where a0 is start (or start + i)
- * which is marginaly faster than using uint64 (which loops after every sd instruction), 
- * but also the fastest way other than explicitely writing 512 sd zero instruction
-*/
-void
-fast_page_zero(__uint128_t* start) 
-{
-  for (int i = 0; i < PGSIZE / sizeof(__uint128_t); i++) {
-    *(start + i) = 0;
-  }
 }
 
 void*
@@ -105,7 +101,6 @@ kalloc_zero(void)
   release(&kmem.lock);
 
   if(r)
-    fast_page_zero((__uint128_t*) r); //zero the page
-    //memset((char*)r, 5, PGSIZE); // zero the page
+    fast_page_memset((uint64*) r, 0); //zero the page
   return (void*)r;
 }
