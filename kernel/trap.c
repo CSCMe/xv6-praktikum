@@ -1,5 +1,6 @@
 #include "memlayout.h"
 #include "defs.h"
+#include "scauses.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -29,21 +30,20 @@ trapinithart(void)
 // AMO = Atomic Memory Operation
 // Not mapped: Interrupt causes
 static char* scause_map[] = {
-[0]    "Instruction address misaligned",
-[1]    "Instruction address fault",
-[2]    "Illegal instruction",
-[3]    "Breakpoint",
-[4]    "Reserved",
-[5]    "Load access fault",
-[6]    "AMO address misalignd",
-[7]    "Store/AMO access fault",
-// 8, up to (and including) 11
-[8 ... 11]    "Reserved",
-[12]    "Instruction page fault",
-[13]    "Load page fault",
-[14]    "Reserved",
-[15]    "Store/AMO page fault",
-
+[SCAUSE_IAM]        "Instruction address misaligned",
+[SCAUSE_IAF]          "Instruction address fault",
+[SCAUSE_II]           "Illegal instruction",
+[SCAUSE_BR]           "Breakpoint",
+[SCAUSE_RESERVED_1]   "Reserved",
+[SCAUSE_LAF]          "Load access fault",
+[SCAUSE_AAM]          "AMO address misalignd",
+[SCAUSE_ST_AMO_AF]    "Store/AMO access fault",
+[SCAUSE_ECALL]        "Environment call",
+[SCAUSE_RESERVED_2]   "Reserved",
+[SCAUSE_IPF]          "Instruction page fault",
+[SCAUSE_LOAD_PF]      "Load page fault",
+[SCAUSE_RESERVED_3]   "Reserved",
+[SCAUSE_ST_AMO_PF]    "Store/AMO page fault",
 };
 
 //
@@ -66,8 +66,9 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
+
+  uint64 scause = r_scause();
+  if(scause == SCAUSE_ECALL){
     // system call
 
     if(killed(p))
@@ -85,9 +86,9 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    pr_warning("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    if (r_scause() < 16) {
-      pr_warning("            %s\n", scause_map[r_scause()]);
+    pr_warning("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
+    if (scause < 16) {
+      pr_warning("            %s\n", scause_map[scause]);
     }
     pr_warning("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     setkilled(p);
@@ -166,8 +167,8 @@ kerneltrap()
 
   if((which_dev = devintr()) == 0){
     pr_emerg("scause %p\n", scause);
-    if (r_scause() < 16) {
-      pr_emerg("%s\n", scause_map[r_scause()]);
+    if (scause < 16) {
+      pr_emerg("%s\n", scause_map[scause]);
     }
     pr_emerg("sepc=%p stval=%p\n", r_sepc(), r_stval());
     panic("kerneltrap");
