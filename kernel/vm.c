@@ -176,9 +176,10 @@ uvmfreelevels(pagetable_t pagetable)
 
       for (int l = 0; l < 512; l++) {
         pte_t* low = &((pagetable_t)PTE2PA(*mid))[l];
-        if (*low != 0)
+        if (*low != 0) {
           midEmpty = 0;
           break; // We can abort early if we meet a used entry
+        }
       }
 
       // If middle ain't empty, top ain't empty either
