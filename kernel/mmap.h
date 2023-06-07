@@ -30,6 +30,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
 uint64 __intern_munmap(void* addr, uint64 length);
 int64  munmap_shared(uint64 physicalAddr, uint32 doWriteBack);
 int64 acquire_or_insert_table(struct buf* underlying_buf,  void* physicalAddr);
+int populate_mmap_page(uint64 addr);
 
 typedef struct __map_shared_entry {
     // How many procs have mapped this page

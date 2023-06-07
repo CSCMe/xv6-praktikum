@@ -85,6 +85,15 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if (scause == SCAUSE_LOAD_PF || scause == SCAUSE_ST_AMO_PF) { // If load or store failed, try to recover
+    //pr_debug("usertrap(): scause LOAD/STORE page fault. pid=%d\n", p->pid);
+    //pr_debug("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    int recovery_failed = populate_mmap_page(r_stval());
+    if (recovery_failed) {
+      pr_warning("usertrap(): unrecoverable LOAD/STORE page fault: pid=%d\n", p->pid);
+      pr_warning("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      setkilled(p);
+    }
   } else {
     pr_warning("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
     if (scause < 16) {

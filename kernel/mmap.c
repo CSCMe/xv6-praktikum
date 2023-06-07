@@ -4,7 +4,7 @@
 #include "kernel/buf.h"
 // There are important things in riscv.h
 
-#define DEBUG_ERRORS
+//#define DEBUG_ERRORS
 //#define DEBUG_PRECON
 //#define DEBUG_SHARED_TABLE
 
@@ -238,25 +238,24 @@ struct buf* get_nth_buffer_from_file(uint64 n, struct file* f) {
     return bp;
 }
 
-void populate_mmap_page(void* addr) {
-    if ((uint64)addr % 4096 != 0) 
-        panic("mmap populate");
+// Returns 0 on success, != 0 on fail
+int populate_mmap_page(uint64 addr) {
+    if (addr % 4096 != 0 || addr < (uint64)MMAP_MIN_ADDR)
+        return 2;
 
-    uint64 curAlloc = (uint64) kalloc_zero();
-    /* mmap manpage says ignore kalloc errors            
-    if (curAlloc == NULL) {
-        // kernel malloc error
-        #ifdef DEBUG_ERRORS
-            pr_debug("INTERN-MMAP-ENOMEM: Kernel alloc failed: i:%d, req:%d\n", i ,required_pages);
-        #endif
-        return ENOMEM;
-    }*/
     // Validates mapping
-    pte_t* entry = walk(myproc()->pagetable, curAlloc, 1);
-    // Bits other than permission should be 0, are now address
-    *entry |= PA2PTE(curAlloc);
-    // Mark entry as valid
-    *entry |= PTE_V;
+    pte_t* entry = walk(myproc()->pagetable, addr, 1);
+    // If entry is MM and not already valid
+    if (*entry & PTE_MM && !(*entry & PTE_V)) {
+        // Bits other than permission should be 0, are now address
+        *entry |= PA2PTE(kalloc_zero());
+        // Mark entry as valid
+        *entry |= PTE_V;
+        return 0;
+    } else {
+        return 1;
+    }
+
 }
 
 /**
@@ -381,7 +380,7 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
             // MAP_POPULATE ignores kalloc erros (for some reason)
         } else { // Not populate && anon. Demand paging time
             curAlloc = NULL;
-            pr_debug("virt demand:%p\n", base + (i * PGSIZE));
+            //pr_debug("virt demand:%p\n", base + (i * PGSIZE));
         }
 
         // Insert into shared map
@@ -404,24 +403,39 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
 
         // Gets an old entry at this location and frees & invalidates it
         pte_t* entry = walk(curTable, curVA, 1);
+        if (entry == 0) {
+            #ifdef DEBUG_ERRORS
+            pr_debug("INTERN-MMAP-ENOMEM: Walk kalloc failed");
+            #endif
+            return ENOMEM;
+        }
+        
         if (*entry != 0) {
-            __intern_munmap((void*) curVA, PGSIZE);
+            // Shared entry -> check and unmap
+            if (*entry & PTE_SH) {
+                int should_free = munmap_shared(PTE2PA(*entry), 0);
+                uvmunmap(curTable, curVA, 1, should_free);
+            } else if (*entry & PTE_V) { // Private valid entry
+                // Free private entry
+                kfree((void*) PTE2PA(*entry));
+            }
+            // Now that we've freed. Set entry to 0
             *entry = 0;
         }
+
         // entry is now a pte we want. Set its flags (and address if MAP_POPULATE is set)
         *entry |= entryProt;
         if (flags & MAP_POPULATE) {
             *entry |= PTE_V;
             *entry |= PA2PTE(curAlloc);
         }
-
+        proc->last_mmap = (void*) curVA;
     }
 
     #ifdef DEBUG_PT
     pr_debug("Result: %p: \n", base);
     print_pt();
     #endif
-    proc->last_mmap = (void*) base;
     return (uint64)base;
 }
 
@@ -441,24 +455,35 @@ uint64 __intern_munmap(void* addr, uint64 length) {
 
     pagetable_t curTable = myproc()->pagetable;
 
-    void* startAddr = addr;
     // Every single page in this range will be unmapped
     // munmap docs: It is not an error if the indicated range does not contain any mapped pages.
-    for (; addr < startAddr + length; addr += PGSIZE) {
-        pte_t* tableEntry = walk(curTable, (uint64)addr, 0);
-        uint64 intEntry = (uint64) *tableEntry;
-
-        if (intEntry != 0 && (intEntry & PTE_V) && (intEntry & PTE_U) && (intEntry & PTE_MM)) {
-            if (intEntry & PTE_SH) {
-                int should_free = munmap_shared(PTE2PA(intEntry), 1);
-                uvmunmap(curTable, (uint64)addr, 1, should_free);
+    for (int i = 0; i < PGROUNDUP(length) / PGSIZE; i++) {
+        uint64 curAddr = (uint64)addr + (i * PGSIZE);
+        pte_t* tableEntry = walk(curTable, curAddr, 0);
+        uint64 flags = PTE_FLAGS(*tableEntry);
+        // Entry does not exist or is already 0. Cool, continue;
+        if (tableEntry == 0 || *tableEntry == 0) {
+            continue;
+        }
+        // Entry is valid and mmaped
+        if(flags & PTE_MM && flags & PTE_U) {
+            if (flags & PTE_V) {
+                if (flags & PTE_SH) {
+                    int should_free = munmap_shared(PTE2PA(*tableEntry), 1);
+                    uvmunmap(curTable, curAddr, 1, should_free);
+                } else {
+                    // Invalidate mapping, and free memory
+                    uvmunmap(curTable, curAddr, 1, 1);
+                }
             } else {
-                // Invalidate mapping, and free memory
-                uvmunmap(curTable, (uint64)addr, 1, 1);
+                // Just set flags to 0 if it's not valid
+                *tableEntry = 0;
             }
         }
     }
-
+    // Sometimes we need to free levels. Let's do so here and quite frequently at first (sloooow)
+    // Iterate over entire pagetable and check from bottom to top if entire thing empty
+    uvmfreelevels(curTable);
 
     return 0;
 }

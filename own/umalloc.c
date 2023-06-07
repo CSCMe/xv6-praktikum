@@ -151,7 +151,7 @@ BuddyManager* get_and_init_manager(uint32 requiredLevel) {
     // Allocate memory for new manager list
     uint64 neededMem = PGROUNDUP(sizeof(BuddyManager) * (managerList.length + 1));
 
-    void* rVal = mmap(NULL, neededMem, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
+    void* rVal = mmap(NULL, neededMem, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE | MAP_POPULATE, -1, 0);
     if (rVal == MAP_FAILED) {
         #ifdef DEBUG_ERRORS
         printf("MALLOC-CRITICAL-ERROR: Couldn't allocate space for new list\n");

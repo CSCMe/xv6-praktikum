@@ -157,6 +157,44 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+// Something goes wrong in here, upper tables are freed even though they should not be
+void
+uvmfreelevels(pagetable_t pagetable)
+{
+  // Yay, magic numbers! 128 is MMAP_MIN_ADDR and 256 is MAXVA :)
+  for (int u = 0; u < 256; u++) {
+    pte_t *upper = &pagetable[u];
+    int upEmpty = 1;
+    if (*upper == 0)
+      continue;
+
+    for (int m = 0; m < 512; m++) {
+      pte_t* mid = &((pagetable_t)PTE2PA(*upper))[m];
+      int midEmpty = 1;
+      if (*mid == 0) 
+        continue;
+
+      for (int l = 0; l < 512; l++) {
+        pte_t* low = &((pagetable_t)PTE2PA(*mid))[l];
+        if (*low != 0)
+          midEmpty = 0;
+      }
+
+      // If middle ain't empty, top ain't empty either
+      if (midEmpty == 0) {
+        upEmpty = 0;
+      } else {
+        kfree((void*)PTE2PA(*mid));
+        *mid = 0;
+      }
+    }
+    if (upEmpty == 1) {
+      kfree((void*)PTE2PA(*upper));
+      *upper = 0;
+    }
+  }
+}
+
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
@@ -327,7 +365,7 @@ uint64 uvmcopymmap(pagetable_t new, pagetable_t old, pagetable_t curOld, uint64 
       // this PTE points to a lower-level page table.
       uint64 child = PTE2PA(pte);
       uvmcopymmap(new, old, (pagetable_t)child, (constructedAddr << 9) + i);
-    } else if ((pte & PTE_MM) && (pte & PTE_V) && (pte & PTE_U)){
+    } else if ((pte & PTE_MM) && (pte & PTE_U)){ // If this is an mmaped entry
       // Address for this entry
       uint64 entryVA = ((constructedAddr << 9) + i) << PGSHIFT;
       uint64 entryPA = PTE2PA(pte);
@@ -337,7 +375,7 @@ uint64 uvmcopymmap(pagetable_t new, pagetable_t old, pagetable_t curOld, uint64 
       // Add a new entry to the shared table if shared
       if ((entryFlags & PTE_SH)) {
         acquire_or_insert_table(NULL, newMemory);
-      } else {
+      } else if (entryFlags & PTE_V){ // valid entry gets copied
         // Copy this entry
         newMemory = kalloc();
         if (newMemory == NULL) {
@@ -346,14 +384,18 @@ uint64 uvmcopymmap(pagetable_t new, pagetable_t old, pagetable_t curOld, uint64 
         memmove(newMemory, (void*)entryPA, PGSIZE);
       }
 
-      if(mappages(new, entryVA, PGSIZE, (uint64)newMemory, entryFlags) != 0){
-        // If mapping fails at some point, free the entire Area
-        if (!(entryFlags & PTE_SH)) {
+      pte_t* newEntry = walk(new, entryVA, 1);
+      // In case of a walk failure, free everything
+      if (newEntry == 0) {
+        if (!(entryFlags & PTE_SH) && newMemory != NULL) {
           kfree(newMemory);
         }
         uvmfreemmap(new, new, 0);
         return 2;
       }
+      // Else: Set PA and Flags
+      *newEntry |= entryFlags;
+      *newEntry |= PA2PTE(newMemory);
     }
   }
   return 0;
@@ -541,7 +583,7 @@ print_pt()
         continue;
       for (int l = 0; l < 512; l++) {
         pte_t low = ((pagetable_t)PTE2PA(mid))[l];
-        if (!(low & PTE_V))
+        if (!(low & (PTE_V | PTE_MM)))
           continue;
         union debugpte_t entry = {.table=low};
         
