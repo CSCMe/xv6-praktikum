@@ -91,6 +91,7 @@ usertrap(void)
     int recovery_failed = populate_mmap_page(r_stval());
     if (recovery_failed) {
       pr_warning("usertrap(): unrecoverable LOAD/STORE page fault: pid=%d\n", p->pid);
+      pr_warning("            %s\n", scause_map[scause]);
       pr_warning("            sepc=%p stval=%p\n", r_sepc(), r_stval());
       setkilled(p);
     }
