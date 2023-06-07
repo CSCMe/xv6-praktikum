@@ -426,8 +426,16 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         // entry is now a pte we want. Set its flags (and address if MAP_POPULATE is set)
         *entry |= entryProt;
         if (flags & MAP_POPULATE) {
-            *entry |= PTE_V;
-            *entry |= PA2PTE(curAlloc);
+            if (curAlloc != NULL) {
+                *entry |= PTE_V;
+                *entry |= PA2PTE(curAlloc);
+            } else {
+                // Failure. manpage explicitely states we should not fail in this case but that won't stop us cuz we can't read 
+                #ifdef DEBUG_ERRORS
+                pr_debug("INTERN-MMAP-ENOMEM: POPULATE kalloc failed");
+                #endif
+                return ENOMEM;
+            }
         }
         proc->last_mmap = (void*) curVA;
     }
