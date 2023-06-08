@@ -303,9 +303,10 @@ uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file
         entryProt |= PTE_W | PTE_R;
     if (prot & PROT_EXEC)
         entryProt |= PTE_X;
-
-    if ((flags & MAP_ANON)) {
-        // We shall ignore this for now
+    
+    // An unset MAP_ANON also implies MAP_POPULATE
+    if (!(flags & MAP_ANON)) {
+        flags |= MAP_POPULATE;
     }
 
     // MAP_SHARED sets PTE_SH page bit & IMPLIES MAP_POPULATE
