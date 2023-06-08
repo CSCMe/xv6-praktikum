@@ -185,7 +185,8 @@ uvmfreelevels(pagetable_t pagetable)
       // If middle ain't empty, top ain't empty either
       if (midEmpty == 0) {
         upEmpty = 0;
-        break; // We can abort early
+        //break; // BUT! We can't abort early cuz other entries might be empty that need checking
+        // Lowest level can break, mid & up cannot, cuz low does not free only check
       } else {
         kfree((void*)PTE2PA(*mid));
         *mid = 0;
