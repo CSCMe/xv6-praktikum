@@ -1,3 +1,4 @@
 [submodule "benchmarks"]
 	path = shared
-	url = git@git.scc.kit.edu:itec-os/release/rxv6pp-benchmarks.git
+	url = https://git.scc.kit.edu/itec-os/release/rxv6pp-benchmarks.git
+	ignore = all
