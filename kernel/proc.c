@@ -246,7 +246,7 @@ userinit(void)
   safestrcpy(p->name, "initcode", sizeof(p->name));
   p->cwd = namei("/");
 
-  p->state = RUNNABLE;
+  schedule_proc(p);
 
   release(&p->lock);
 }
@@ -317,7 +317,7 @@ fork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
-  np->state = RUNNABLE;
+  schedule_proc(np);
   release(&np->lock);
 
   return pid;
@@ -432,42 +432,6 @@ wait(uint64 addr)
   }
 }
 
-// Per-CPU process scheduler.
-// Each CPU calls scheduler() after setting itself up.
-// Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
-//  - swtch to start running that process.
-//  - eventually that process transfers control
-//    via swtch back to the scheduler.
-void
-scheduler(void)
-{
-  struct proc *p;
-  struct cpu *c = mycpu();
-  
-  c->proc = 0;
-  for(;;){
-    // Avoid deadlock by ensuring that devices can interrupt.
-    intr_on();
-
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-      }
-      release(&p->lock);
-    }
-  }
-}
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
@@ -502,7 +466,7 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  p->state = RUNNABLE;
+  schedule_proc(p);
   sched();
   release(&p->lock);
 }
@@ -570,7 +534,7 @@ wakeup(void *chan)
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
-        p->state = RUNNABLE;
+        schedule_proc(p);
       }
       release(&p->lock);
     }
@@ -591,7 +555,7 @@ kill(int pid)
       p->killed = 1;
       if(p->state == SLEEPING){
         // Wake process from sleep().
-        p->state = RUNNABLE;
+        schedule_proc(p);
       }
       release(&p->lock);
       return 0;
