@@ -240,7 +240,7 @@ struct buf* get_nth_buffer_from_file(uint64 n, struct file* f) {
 
 // Returns 0 on success, != 0 on fail
 int populate_mmap_page(uint64 addr) {
-    if (addr % 4096 != 0 || addr < (uint64)MMAP_MIN_ADDR)
+    if (addr % 4096 != 0 || addr < (uint64)MMAP_MIN_ADDR || addr >= MAXVA)
         return 2;
 
     // Validates mapping
