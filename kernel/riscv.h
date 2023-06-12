@@ -340,6 +340,15 @@ sfence_vma()
   asm volatile("sfence.vma zero, zero");
 }
 
+// Credit to meighty for the idea (https://github.com/meighti/xv6-riscv/commit/b1ad5f3265d0e9d58038ae62f94290beeaf23d90)
+static inline void
+wait_intr()
+{
+  // Wait for interrupt
+  asm volatile("wfi");
+}
+
+
 typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
 

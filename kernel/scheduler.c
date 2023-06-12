@@ -79,7 +79,6 @@ schedule_proc(struct proc* proc)
 }
 
 
-
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -102,11 +101,18 @@ scheduler(void)
 
     struct proc *p = NULL;
 
-    // Spin baby, spin
-    while (p == NULL) {
-        acquire(&runnable_queue.queue_lock);
-        p = pop_queue(&runnable_queue);
-        release(&runnable_queue.queue_lock);
+    // Get first entry of ready queue
+    acquire(&runnable_queue.queue_lock);
+    p = pop_queue(&runnable_queue);
+    release(&runnable_queue.queue_lock);
+    
+    // Queue is empty, wait for interrupt
+    if (p == NULL) {
+        // Ensure that interrupts are actually on
+        intr_on();
+        wait_intr();
+        // Restart loop on interrupt
+        continue;
     }
     
     acquire(&p->lock);
