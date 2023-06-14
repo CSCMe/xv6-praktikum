@@ -90,13 +90,15 @@ usertrap(void)
     //pr_debug("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     int recovery_failed = populate_mmap_page(r_stval());
     if (recovery_failed) {
-      pr_warning("usertrap(): unrecoverable LOAD/STORE page fault: pid=%d\n", p->pid);
+      uint64 failed_addr = r_stval();
+      pr_warning("\nusertrap(): unrecoverable LOAD/STORE page fault: pid=%d\n", p->pid);
       pr_warning("            %s\n", scause_map[scause]);
-      pr_warning("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      pr_warning("            sepc=%p stval=%p\n", r_sepc(), failed_addr);
+      pr_warning("            Page: %d.%d.%d\n", PX(2, failed_addr), PX(1, failed_addr), PX(0, failed_addr));
       setkilled(p);
     }
   } else {
-    pr_warning("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
+    pr_warning("\nusertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
     if (scause < 16) {
       pr_warning("            %s\n", scause_map[scause]);
     }
