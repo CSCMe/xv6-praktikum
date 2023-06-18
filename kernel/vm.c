@@ -557,7 +557,7 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
  * Print a process PTs lowest entries
 */
 uint64
-print_pt()
+print_pt(pagetable_t pagetable)
 {
 
   union debugpte_t {
@@ -576,7 +576,6 @@ print_pt()
       uint64 addr : 54;
     };
   };
-  pagetable_t pagetable = myproc()->pagetable;
   for (int u = 0; u < 512; u++) {
     pte_t upper = pagetable[u];
     if (!(upper & PTE_V))
