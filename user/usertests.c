@@ -2394,6 +2394,7 @@ void argptest(char *s)
 
 // check that there's an invalid page beneath
 // the user stack, to catch stack overflow.
+// WARNING: This test will break on implementation of dynamic stack
 void
 stacktest(char *s)
 {
@@ -2403,7 +2404,7 @@ stacktest(char *s)
   pid = fork();
   if(pid == 0) {
     char *sp = (char *) r_sp();
-    sp -= PGSIZE;
+    sp -= INITIAL_USTACKSIZE;
     // the *sp should cause a trap.
     printf("%s: stacktest: read below stack %p\n", s, *sp);
     exit(1);

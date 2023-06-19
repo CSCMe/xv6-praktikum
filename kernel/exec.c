@@ -74,12 +74,13 @@ exec(char *path, char **argv)
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
   uint64 sz1;
-  if((sz1 = uvmalloc(pagetable, sz, sz + 2*PGSIZE, PTE_W)) == 0)
+  if ((sz1 = uvmalloc(pagetable, sz, sz + (PGSIZE + INITIAL_USTACKSIZE), PTE_W)) == 0) 
     goto bad;
   sz = sz1;
-  uvmclear(pagetable, sz-2*PGSIZE);
-  sp = sz;
-  stackbase = sp - PGSIZE;
+  uvmclear(pagetable, sz - (PGSIZE + INITIAL_USTACKSIZE));
+  sp = sz; // Stack grows down so we use highest addr as sp
+  // - STACKSIZE, we want bottom of stack
+  stackbase = sp - INITIAL_USTACKSIZE;
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
