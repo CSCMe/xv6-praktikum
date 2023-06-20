@@ -25,6 +25,9 @@ using osdev_mutex_inner_t = std::atomic<osdev_mutex_underlying_t>;
 #ifdef __cplusplus
 extern "C" {
 #endif
+#include "user/sutex.h"
+
+#define MAX_SPINCOUNT 10000
 
 struct osdev_mutex_t;
 //! having fun with linkage...
@@ -36,6 +39,7 @@ typedef struct osdev_mutex_t osdev_mutex_t;
 struct osdev_mutex_t {
     //! an atomic counter
     osdev_mutex_inner_t inner;
+    osdev_sutex_t lock;
 
     //! \attention you can add more stuff here if you want
 };
