@@ -90,3 +90,31 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_futex_init(void)
+{
+  uint64* futex;
+  argaddr(0, (uint64*)&futex);
+  return __futex_init(futex);
+}
+
+uint64
+sys_futex_wait(void)
+{
+  uint64* futex;
+  int val;
+  argaddr(0, (uint64*)&futex);
+  argint(1, &val);
+  return __futex_wait(futex, val);
+}
+
+uint64
+sys_futex_wake(void)
+{
+  uint64* futex;
+  int num_wake;
+  argaddr(0, (uint64*)&futex);
+  argint(1, &num_wake);
+  return __futex_wake(futex, num_wake);
+}

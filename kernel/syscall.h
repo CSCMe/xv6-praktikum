@@ -34,6 +34,9 @@ extern "C" {
 #define SYS_close  21
 #define SYS_mmap   22
 #define SYS_munmap 23
+#define SYS_futex_init 24
+#define SYS_futex_wait 25
+#define SYS_futex_wake 26
 #define SYS_hello_kernel 50
 #define SYS_printPT 51
 #define SYS_cxx    100

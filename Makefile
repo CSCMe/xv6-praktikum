@@ -35,6 +35,8 @@ OBJS = \
   $K/terminate.o \
   $K/mmap.o \
   $K/scheduler.o \
+  $K/futex.o \
+  $K/process_queue.o \
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -164,6 +166,7 @@ UPROGS=\
 	$O/_test_nmalloc\
 	$O/_test_mmap_file\
 	shared/tests/_mutex-test\
+#	$U/_futex\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

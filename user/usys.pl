@@ -38,4 +38,6 @@ entry("uptime");
 entry("cxx");
 entry("term");
 entry("printPT");
-
+entry("futex_wait");
+entry("futex_wake");
+entry("futex_init");

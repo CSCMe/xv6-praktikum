@@ -39,6 +39,9 @@ void cxx(int);
 void term();
 int hello_kernel(int);
 int printPT(void);
+int futex_init(uint64* futex);
+int futex_wait(uint64* futex, uint64 val);
+int futex_wake(uint64* futex, int num_wake);
 
 // ulib.c
 int stat(const char*, struct stat*);

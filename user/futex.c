@@ -9,6 +9,7 @@ enum osdev_mutex_lock_state {
 };
 
 void osdev_mutex_init(osdev_mutex_t *mutex) {
+    futex_init((uint64*)&mutex->inner);
     atomic_store(&mutex->inner, LOCK_FREE);
 }
 
@@ -26,7 +27,7 @@ void osdev_mutex_lock(osdev_mutex_t *mutex) {
         }
         // If lock_state is either TAKEN or WAITING, wait, set lock to waiting after wait
         while (lock_state != LOCK_FREE) {
-            futex_wait(mutex, LOCK_WAITING); // uses stub rn
+            futex_wait((uint64*)&mutex->inner, LOCK_WAITING); // uses stub rn
             lock_state = atomic_exchange_explicit(&mutex->inner, LOCK_WAITING, memory_order_acquire);
         }
     }
@@ -39,7 +40,7 @@ void osdev_mutex_unlock(osdev_mutex_t *mutex) {
         // Not atomic in the original but why shouldn't it be?
         atomic_store_explicit(&mutex->inner, LOCK_FREE, memory_order_release);
         //atomic_store_explicit(&mutex->inner, LOCK_FREE, memory_order_release);
-        futex_wake(mutex, 1); // Only wakes a single sleeper
+        futex_wake((uint64*)&mutex->inner, 1); // Only wakes a single sleeper
     }
 }
 
