@@ -24,6 +24,7 @@ typedef struct __queue {
   ProcessQueueEntry* start;
   ProcessQueueEntry* end;
   struct spinlock queue_lock;
+  int valid;
 } ProcessQueue;
 
 

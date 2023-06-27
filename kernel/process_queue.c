@@ -54,5 +54,6 @@ init_queue(ProcessQueue* queue, char* lock_name)
 {
     queue->start = &queue->entries_buffer[0];
     queue->end = &queue->entries_buffer[0];
+    queue->valid = 1;
     initlock(&queue->queue_lock, lock_name);
 }
