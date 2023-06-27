@@ -15,7 +15,7 @@ main()
     kinit();         // physical page allocator
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging
-    schedulerinit();
+    schedulerinit(); // creates structures required for scheduler
     procinit();      // process table
     trapinit();      // trap vectors
     trapinithart();  // install kernel trap vector
@@ -25,6 +25,7 @@ main()
     iinit();         // inode table
     fileinit();      // file table
     virtio_disk_init(); // emulated hard disk
+    futex_control_init(); // futex structures
     userinit();      // first user process
     __sync_synchronize();
     started = 1;

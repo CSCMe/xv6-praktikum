@@ -45,6 +45,7 @@ pop_queue(ProcessQueue* queue)
     }
 
     struct proc* popped_proc = queue->start->proc;
+    queue->start->proc = NULL;
     queue->start = next_queue_entry(queue, queue->start);
     return popped_proc;
 }

@@ -201,7 +201,9 @@ void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
 // futex.c
+void          futex_control_init();
 uint64          __futex_init(uint64* futex);
+void            __futex_deinit(void* phys_page_addr);
 uint64          __futex_wait(uint64* futex, int val); 
 uint64          __futex_wake(uint64* futex, int num_wake);
 
