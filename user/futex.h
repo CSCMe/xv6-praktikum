@@ -39,8 +39,6 @@ typedef struct osdev_mutex_t osdev_mutex_t;
 struct osdev_mutex_t {
     //! an atomic counter
     osdev_mutex_inner_t inner;
-    int last_ticket_num;
-    int current_ticket;
     //! \attention you can add more stuff here if you want
 };
 
