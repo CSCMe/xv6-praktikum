@@ -1,60 +1,6 @@
 #include "kernel/proc.h"
 #include "kernel/scheduler.h"
 
-void debug_queue(ProcessQueue* queue, char* startMess)
-{
-    pr_debug("Queue Debug: %s\n", startMess);
-    ProcessQueueEntry* entry = queue->first;
-    do
-    {
-        pr_debug("pid: %d, state:%d\n", entry->proc->pid, entry->proc->state);
-    } while ((entry = entry->next) != NULL);
-    pr_debug("End\n");
-}
-
-void
-append_queue(ProcessQueue* queue, struct proc* proc)
-{  
-    ProcessQueueEntry* entry = &queue->entries_buffer[queue->next_buffer_loc];
-    entry->proc = proc;
-    entry->next = NULL;
-
-    if (queue->last != NULL) {
-        queue->last->next = entry;
-    } else {
-        // If queue is empty: queue->last & queue->first are both NULL
-        queue->first = entry;
-    }
-    queue->last = entry;
-    queue->next_buffer_loc = (queue->next_buffer_loc + 1) % NPROC;
-}
-
-struct proc*
-pop_queue(ProcessQueue* queue)
-{
-    if (queue->first == NULL) {
-        return NULL;
-    }
-    struct proc* popped_proc = queue->first->proc;
-
-    queue->first = queue->first->next;
-    // If now the queue is empty, set first and last to NULL
-    if (queue->first == NULL) {
-        queue->last = NULL;
-    }
-
-    return popped_proc;
-}
-
-void 
-init_queue(ProcessQueue* queue, char* lock_name)
-{
-    queue->first = NULL;
-    queue->last = NULL;
-    queue->next_buffer_loc = 0;
-    initlock(&queue->queue_lock, lock_name);
-}
-
 void
 schedulerinit()
 {

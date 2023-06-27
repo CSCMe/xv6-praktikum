@@ -10,25 +10,7 @@ extern "C" {
 #endif
 
 #include "kernel/defs.h"
-
-typedef struct __queue_entry {
-  struct proc* proc;
-  struct __queue_entry* next;
-} ProcessQueueEntry;
-
-/**
- * Queue struct for scheduler queues
-*/
-typedef struct __queue {
-  // Ringbuffer containing entries
-  ProcessQueueEntry entries_buffer[NPROC];
-  // Index of next free entry
-  int next_buffer_loc;
-  struct spinlock queue_lock;
-  ProcessQueueEntry* first;
-  ProcessQueueEntry* last;
-} ProcessQueue;
-
+#include "kernel/process_queue.h"
 
 ProcessQueue runnable_queue;
 ProcessQueue wait_queue;
