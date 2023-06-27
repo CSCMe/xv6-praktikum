@@ -17,15 +17,6 @@ extern "C" {
 
 #define SHARED_MAPPING_ENTRIES_NUM 512  // Can share up to 512*4096 = 2MB, should be enough
 
-/* Error codes */
-#define EPERM  0x1    // Permission error
-#define EINVAL 0x2    // Invalid input
-#define ENIMPL 0x3    // Not implemented
-#define EEXIST 0x4    // Mapping exists, but we don't want to overwrite
-#define ENOMEM 0x194  // Memory not found
-#define EACCESS 0x5   // 
-#define EBADF   0x6
-
 uint64 __intern_mmap(void *addr, uint64 length, int prot, int flags, struct file* f, uint64 offset) ;
 uint64 __intern_munmap(void* addr, uint64 length);
 int64  munmap_shared(uint64 physicalAddr, uint32 doWriteBack);

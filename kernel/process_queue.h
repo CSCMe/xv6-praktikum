@@ -20,11 +20,11 @@ typedef struct __queue_entry {
 */
 typedef struct __queue {
   // Ringbuffer containing entries
-  ProcessQueueEntry entries_buffer[NPROC];
-  ProcessQueueEntry* start;
-  ProcessQueueEntry* end;
-  struct spinlock queue_lock;
-  int valid;
+  ProcessQueueEntry entries_buffer[NPROC];    // Array containing procs, acts as ring buffer queue
+  ProcessQueueEntry* start;                   // Start of current queue
+  ProcessQueueEntry* end;                     // End of current queue
+  struct spinlock queue_lock;                 // Lock for this queue
+  int valid;                                  // 1 when initialized queue, else undefined
 } ProcessQueue;
 
 

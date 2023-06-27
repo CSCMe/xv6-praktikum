@@ -9,6 +9,8 @@
 extern "C" {
 #endif
 
+#include "uk-shared/error_codes.h"
+
 #define MMAP_MIN_ADDR (void*)((uint64)1 << 29)
 
 #define PROT_READ   0x1
