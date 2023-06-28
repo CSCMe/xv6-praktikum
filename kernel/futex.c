@@ -104,6 +104,7 @@ void __futex_deinit(void* physical_page_addr) {
         // Check if it's on the same page
         if (((uint64)entry->key >> PGSHIFT) == ((uint64)physical_page_addr >> PGSHIFT)) {
             entry->key = NULL;
+            entry->value->valid = 0;
             entry->value = NULL;
         }
     }

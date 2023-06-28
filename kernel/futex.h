@@ -9,7 +9,7 @@ extern "C" {
 #include "kernel/defs.h"
 #include "uk-shared/error_codes.h"
 
-#define FUTEX_MAX_LOCKS     21      // only multiples of queues_per_page
+#define FUTEX_MAX_LOCKS     49      // only multiples of queues_per_page
 #define FUTEX_QUEUES_PER_PAGE     (PGSIZE / sizeof(ProcessQueue))
 #define FUTEX_CONTROL_PAGES (FUTEX_MAX_LOCKS / FUTEX_QUEUES_PER_PAGE)
 

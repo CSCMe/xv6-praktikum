@@ -110,6 +110,9 @@ int64 munmap_shared(uint64 physicalAddr, uint32 doWriteBack) {
     debug_shared_mappings_table();
     #endif
     if ((--(currentEntry->refCount)) == 0) {
+         // Deinit any futexes on this page
+        __futex_deinit(currentEntry->physicalAddr);
+        // Set physical address to NULL
         currentEntry->physicalAddr = NULL;
         struct buf* entryBuf = currentEntry->underlying_buf;
         // Loop through all successive entries until there's an empty one, and move the entries to their new position
@@ -138,7 +141,6 @@ int64 munmap_shared(uint64 physicalAddr, uint32 doWriteBack) {
 
         shared_mappings_table.entries[holeIndex] = (MapSharedEntry){.physicalAddr=NULL, .refCount=0, .underlying_buf=NULL};
 
-       
         release(&shared_mappings_table.tableLock);
         if (entryBuf != NULL) {
             // doWriteBack is true if called from munmap and false if called from zombie cleanup (wait)
