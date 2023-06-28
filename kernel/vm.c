@@ -612,7 +612,7 @@ print_pt(pagetable_t pagetable)
         }
         
         pr_info("%p, Flags: V:%d, R:%d, W:%d, X:%d, U:%d, G:%d, A:%d, D:%d, MM:%d, SH:%d\n",
-        entry.addr, entry.valid, entry.read, 
+        entry.addr << PGSHIFT, entry.valid, entry.read, 
         entry.write, entry.execute, entry.user,
         entry.global, entry.accessed, entry.dirty,
         entry.mmap, entry.shared);
