@@ -37,6 +37,7 @@ OBJS = \
   $K/scheduler.o \
   $K/futex.o \
   $K/process_queue.o \
+  $K/virtio_net.o \
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
