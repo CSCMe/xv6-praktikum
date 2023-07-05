@@ -70,7 +70,7 @@ virtio_net_init(void)
 {
     uint32 status = 0;
 
-    //initlock(&disk.vdisk_lock, "virtio_disk");
+    initlock(&net_card.net_lock, "virtio_net");
 
     if(*R(VIRTIO_MMIO_MAGIC_VALUE) != 0x74726976 ||
         *R(VIRTIO_MMIO_VERSION) != 2 ||
