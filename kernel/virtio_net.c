@@ -58,13 +58,40 @@ static struct net_card {
   */
 } net_card;
 
+void debug_available_features(uint64 features) {
+  pr_debug("virtio-net available features:\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_CSUM)) pr_debug("VIRTIO_NET_F_CSUM\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_GUEST_CSUM)) pr_debug("VIRTIO_NET_F_GUEST_CSUM\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_CTRL_GUEST_OFFLOADS)) pr_debug("VIRTIO_NET_F_CTRL_GUEST_OFFLOADS\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_MTU)) pr_debug("VIRTIO_NET_F_MTU\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_MAC)) pr_debug("VIRTIO_NET_F_MAC\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_GUEST_TSO4)) pr_debug("VIRTIO_NET_F_GUEST_TSO4\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_GUEST_TSO6)) pr_debug("VIRTIO_NET_F_GUEST_TSO6\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_GUEST_ECN)) pr_debug("VIRTIO_NET_F_GUEST_ECN\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_GUEST_UFO)) pr_debug("VIRTIO_NET_F_GUEST_UFO\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_HOST_TSO4)) pr_debug("VIRTIO_NET_F_HOST_TSO4\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_HOST_TSO6)) pr_debug("VIRTIO_NET_F_HOST_TSO6\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_HOST_ECN)) pr_debug("VIRTIO_NET_F_HOST_ECN\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_HOST_UFO)) pr_debug("VIRTIO_NET_F_HOST_UFO\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_MRG_RXBUF)) pr_debug("VIRTIO_NET_F_MRG_RXBUF\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_STATUS)) pr_debug("VIRTIO_NET_F_STATUS\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_HOST_UFO)) pr_debug("VIRTIO_NET_F_HOST_UFO\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_CTRL_VQ)) pr_debug("VIRTIO_NET_F_CTRL_VQ\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_CTRL_RX)) pr_debug("VIRTIO_NET_F_CTRL_RX\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_CTRL_VLAN)) pr_debug("VIRTIO_NET_F_CTRL_VLAN\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_GUEST_ANNOUNCE)) pr_debug("VIRTIO_NET_F_GUEST_ANNOUNCE\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_MQ)) pr_debug("VIRTIO_NET_F_MQ\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_CTRL_MAC_ADDR)) pr_debug("VIRTIO_NET_F_CTRL_MAC_ADDR\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_RSC_EXT)) pr_debug("VIRTIO_NET_F_RSC_EXT\n");
+  if (features & ((uint64)1 << VIRTIO_NET_F_STANDBY)) pr_debug("VIRTIO_NET_F_STANDBY\n");
+  pr_debug("\n");
+}
 
-void debug_mac_addr(uint8 mac_addr[6])
-{
+void debug_mac_addr(uint8 mac_addr[6]) {
     pr_debug("MAC Address: %x-%x-%x-%x-%x-%x\n", 
         mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 }
- 
+
 void
 virtio_net_init(void)
 {
@@ -92,6 +119,7 @@ virtio_net_init(void)
 
     // negotiate features (only automatic mac address)
     uint64 features = *R(VIRTIO_MMIO_DEVICE_FEATURES);
+    debug_available_features(features);
 
     // ignore features we have, set our own
     // VIRTIO_NET_F_MAC: We have a mac address
