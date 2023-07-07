@@ -92,11 +92,21 @@ virtio_net_init(void)
 
     // negotiate features (only automatic mac address)
     uint64 features = *R(VIRTIO_MMIO_DEVICE_FEATURES);
-    // ignore features we have, set our own
-    features = (1 << VIRTIO_NET_F_MAC);
-    features |= (1 << VIRTIO_NET_F_STATUS);
-    *R(VIRTIO_MMIO_DRIVER_FEATURES) = features;
 
+    // ignore features we have, set our own
+    // VIRTIO_NET_F_MAC: We have a mac address
+    // VIRTIO_NET_F_STATUS: We are allowed to use the status register
+    features &= (1 << VIRTIO_NET_F_MAC) | (1 << VIRTIO_NET_F_STATUS);
+
+    // We require these features to function, therefore we should
+    // assert that they are actually supported
+    if (!(features & (1 << VIRTIO_NET_F_MAC))) 
+      panic("virtio-net device does not supply a MAC address");
+    if (!(features & (1 << VIRTIO_NET_F_STATUS)))
+      panic("virtio-net device does not support configuration via the status register");
+
+    // Complete feature negotiation
+    *R(VIRTIO_MMIO_DRIVER_FEATURES) = features;
     status |= VIRTIO_CONFIG_S_FEATURES_OK;
 
     *R(VIRTIO_MMIO_STATUS) = status;
@@ -104,7 +114,6 @@ virtio_net_init(void)
     if (!(status & VIRTIO_CONFIG_S_FEATURES_OK)) {
         panic("virtio net feature negotiation failed");
     }
-    // Feature negotiation done
 
     // Read config
     uint32 config_gen = *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION);
@@ -118,9 +127,9 @@ virtio_net_init(void)
         panic("net device config fail");
     }
 
+    // We have a mac address!
     debug_mac_addr(config.mac);
 
-    // We have a mac address!
     // Config reading done
 
     // Init virt queues
