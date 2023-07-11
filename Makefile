@@ -199,8 +199,9 @@ endif
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-QEMUOPTS += -netdev user,id=net0  # SLIRP, might need to update later (https://wiki.qemu.org/Documentation/Networking#User_Networking_(SLIRP))
+QEMUOPTS += -netdev tap,id=net0,script=/bpb/xv6-riscv/qemu-ifup,downscript=no,ifname="tap0" #SLIRP, might need to update later (https://wiki.qemu.org/Documentation/Networking#User_Networking_(SLIRP))
 QEMUOPTS += -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1
+QEMUOPTS += -object filter-dump,id=f1,netdev=net0,file=dump.dat
 QEMUOPTS.drive = -drive file=fs.img,if=none,format=raw,id=x0
 
 qemu: $K/kernel fs.img
