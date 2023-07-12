@@ -200,7 +200,6 @@ virtio_net_init(void)
 
     // We have a mac address!
     debug_mac_addr(config.mac);
-
     // Config reading done
     pr_debug("status:%p\n", config.status);
 
@@ -209,36 +208,58 @@ virtio_net_init(void)
 
     struct virtio_net_hdr* package_header = (struct virtio_net_hdr*) buf;
     package_header->num_buffers = 0;
-    package_header->flags = 0;
-    package_header->hdr_len = VIRTIO_NET_HDR_GSO_NONE;
-    package_header->hdr_len = sizeof(package_header);
+    package_header->gso_type = VIRTIO_NET_HDR_GSO_NONE;
+    package_header->hdr_len = sizeof(struct virtio_net_hdr);
     pr_debug("makgin packi");
     struct ethernet_frame {
       uint8 dest[6];
       uint8 src[6];
       uint16 len; // gets ignored by virtio. uses desc->len instead
-      uint8 data[64];
+      uint8 data[32];
       uint8 crc[4];
       uint8 ipg[12];
     };
 
-    struct ethernet_frame* my_data = (struct ethernet_frame*)(buf + sizeof(package_header));
+    struct ethernet_frame* my_data = (struct ethernet_frame*)(buf -2 +  sizeof(struct virtio_net_hdr));
 
     uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     memmove((void*)my_data->dest, (void*)dest, 6);
     memmove((void*)my_data->src, (void*) config.mac, 6);
-    my_data->len = 64;
+    my_data->len = 0x608;
 
     uint8* data = my_data->data;
-    for (int i = 0; i < 64; i++)
-      data[i] = i;
+    
+    struct arp_packet {
+      uint16 net_type;
+      uint16 prot_type;
+      uint8 hlen;
+      uint8 plen;
+      uint16 opcode;
+      uint8 mac_src[6];
+      uint8 ip_src[4];
+      uint8 mac_dest[6];
+      uint8 ip_dest[4];
+    };
+    struct arp_packet* arp = (struct arp_packet*)data;
+    arp->net_type = 1 << 8;
+    arp->prot_type =  (uint16)2048 >> 8;
+    arp->hlen = 6;
+    arp->plen = 4;
+    arp->opcode = 1 << 8;
+    memmove((void*) arp->mac_src, config.mac, 6);
+    uint8 ipme[8] = {10, 0, 2, 15};
+    memmove((void*) arp->ip_src, ipme, 4);
+    memmove((void*)arp->mac_dest, dest, 6);
+    uint8 ipdest[8] = {10, 0, 2, 3};
+    memmove((void*) arp->ip_dest, ipdest, 4);
 
     for (int i = 0; i < 12; i++)
       my_data->ipg[i] = 0;
 
-    net_card.transmit.desc->addr = (uint64) buf + sizeof(package_header); // We ignore package_header and it seems to work
+
+    net_card.transmit.desc->addr = (uint64) buf; // We ignore package_header and it seems to work
     net_card.transmit.desc->flags = 0;
-    net_card.transmit.desc->len = 128;
+    net_card.transmit.desc->len = 0x0608;
     net_card.transmit.driver->idx = 0;
     __sync_synchronize();
     net_card.transmit.driver->idx++;
