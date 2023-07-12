@@ -9,13 +9,16 @@
 #include "memlayout.h"
 #include "buf.h"
 #include "virtio.h"
+#include "net.h"
 
 // the address of virtio mmio register r.
 #define R(r) ((volatile uint32 *)(VIRTIO1 + (r)))
 
 static struct net_card {
-
+    // Control, receive, transmit virtqueues
     virt_queue control, receive, transmit;
+    // MAC address of card
+    uint8 mac_addr[MAC_ADDR_SIZE];
 
     struct spinlock net_lock;
 
@@ -88,9 +91,67 @@ void debug_available_features(uint64 features) {
   pr_debug("\n");
 }
 
-void debug_mac_addr(uint8 mac_addr[6]) {
-    pr_debug("MAC Address: %x-%x-%x-%x-%x-%x\n", 
+void debug_mac_addr(uint8 mac_addr[MAC_ADDR_SIZE]) {
+    pr_debug("MAC Address: %x:%x:%x:%x:%x:%x\n", 
         mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+}
+
+void
+send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* data, uint16 data_length)
+{
+
+  if (data_length > PGSIZE - sizeof(struct virtio_net_hdr) - sizeof(struct ethernet_header)) {
+    pr_info("Can't send package in one go. Abort");
+    return;
+  }
+
+  // Get Send Buffer
+  void* buf = (void*) net_card.transmit.desc->addr;
+  struct ethernet_header* eth_header;
+
+  // Fun with driver weirdness
+  #ifdef VIRTIO_NET_USER_MODE
+  // Only required if not tap (for some reason)
+  struct virtio_net_hdr* virtio_header = (struct virtio_net_hdr*) buf;
+  virtio_header->flags = VIRTIO_NET_HDR_GSO_NONE;
+  virtio_header->num_buffers = 0;
+  virtio_header->hdr_len = sizeof(struct virtio_net_hdr);
+  eth_header = (struct ethernet_header*) ((uint8*) virtio_header + sizeof(struct virtio_net_hdr));
+  #endif
+
+  #ifndef VIRTIO_NET_USER_MODE
+  eth_header = (struct ethernet_header*) buf;
+  #endif
+
+  // Set src address
+  memmove((void*) eth_header->src, (void*) net_card.mac_addr, MAC_ADDR_SIZE);
+  // Set dest address
+  memmove((void*) eth_header->dest, (void*) dest_mac, MAC_ADDR_SIZE);
+
+  if (type == ETHERNET_TYPE_DATA) {
+    eth_header->len  = data_length;
+  } else {
+    eth_header->type = type;
+  }
+
+  // Convert type/length to little endian
+  memreverse(&eth_header->type, sizeof(eth_header->type));
+
+  // Finally copy data
+  memmove((void*) eth_header->data, data, data_length);
+  
+  // Now interact with card
+  acquire(&net_card.net_lock);
+
+  net_card.transmit.desc->addr = (uint64) buf; // We ignore package_header and it seems to work
+  net_card.transmit.desc->flags = 0;
+  net_card.transmit.desc->len = eth_header->len;
+  __sync_synchronize();
+  net_card.transmit.driver->idx++;
+  __sync_synchronize();
+  *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 1; // value is queue number
+
+  release(&net_card.net_lock);
 }
 
 void
@@ -125,7 +186,7 @@ virtio_net_init(void)
     // ignore features we have, set our own
     // VIRTIO_NET_F_MAC: We have a mac address
     // VIRTIO_NET_F_STATUS: We are allowed to use the status register
-    features &= (1 << VIRTIO_NET_F_MAC) | (1 << VIRTIO_NET_F_STATUS);
+    features &= (1 << VIRTIO_NET_F_MAC) | (1 << VIRTIO_NET_F_STATUS) | (1 << VIRTIO_NET_F_MRG_RXBUF);
 
     // We require these features to function, therefore we should
     // assert that they are actually supported
@@ -186,10 +247,11 @@ virtio_net_init(void)
     // Queues are ready
     *R(VIRTIO_MMIO_STATUS) = status;
 
-        // Read config
+    // Read config
     uint32 config_gen = *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION);
     struct virtio_net_config config = {0};
     uint32* config_smol = (uint32*) &config;
+
     for (int i = 0; i < sizeof(struct virtio_net_config) / sizeof(uint32); i++) {
         *(config_smol + i) = *(R(VIRTIO_MMIO_DEVICE_CONFIG) + i);
     }
@@ -198,37 +260,12 @@ virtio_net_init(void)
         panic("net device config fail");
     }
 
+    memmove((void*) net_card.mac_addr, (void*) config.mac, MAC_ADDR_SIZE);
     // We have a mac address!
-    debug_mac_addr(config.mac);
+    debug_mac_addr(net_card.mac_addr);
     // Config reading done
     pr_debug("status:%p\n", config.status);
 
-    uint8* buf = kalloc_zero();
-
-
-    struct virtio_net_hdr* package_header = (struct virtio_net_hdr*) buf;
-    package_header->num_buffers = 0;
-    package_header->gso_type = VIRTIO_NET_HDR_GSO_NONE;
-    package_header->hdr_len = sizeof(struct virtio_net_hdr);
-    pr_debug("makgin packi");
-    struct ethernet_frame {
-      uint8 dest[6];
-      uint8 src[6];
-      uint16 len; // gets ignored by virtio. uses desc->len instead
-      uint8 data[32];
-      uint8 crc[4];
-      uint8 ipg[12];
-    };
-
-    struct ethernet_frame* my_data = (struct ethernet_frame*)(buf -2 +  sizeof(struct virtio_net_hdr));
-
-    uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    memmove((void*)my_data->dest, (void*)dest, 6);
-    memmove((void*)my_data->src, (void*) config.mac, 6);
-    my_data->len = 0x608;
-
-    uint8* data = my_data->data;
-    
     struct arp_packet {
       uint16 net_type;
       uint16 prot_type;
@@ -239,33 +276,26 @@ virtio_net_init(void)
       uint8 ip_src[4];
       uint8 mac_dest[6];
       uint8 ip_dest[4];
-    };
-    struct arp_packet* arp = (struct arp_packet*)data;
+    } actual_arp;
+
+    struct arp_packet* arp = &actual_arp;
     arp->net_type = 1 << 8;
     arp->prot_type =  (uint16)2048 >> 8;
     arp->hlen = 6;
     arp->plen = 4;
-    arp->opcode = 1 << 8;
-    memmove((void*) arp->mac_src, config.mac, 6);
+    arp->opcode = 1;
+
+    memreverse((void*) &arp->opcode, sizeof(arp->opcode));
+    memmove((void*) arp->mac_src, net_card.mac_addr, 6);
     uint8 ipme[8] = {10, 0, 2, 15};
     memmove((void*) arp->ip_src, ipme, 4);
+    uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     memmove((void*)arp->mac_dest, dest, 6);
     uint8 ipdest[8] = {10, 0, 2, 3};
     memmove((void*) arp->ip_dest, ipdest, 4);
 
-    for (int i = 0; i < 12; i++)
-      my_data->ipg[i] = 0;
 
-
-    net_card.transmit.desc->addr = (uint64) buf; // We ignore package_header and it seems to work
-    net_card.transmit.desc->flags = 0;
-    net_card.transmit.desc->len = 0x0608;
-    net_card.transmit.driver->idx = 0;
-    __sync_synchronize();
-    net_card.transmit.driver->idx++;
-    __sync_synchronize();
-
-  *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 1; // value is queue number
+    send_ethernet_packet(dest, ETHERNET_TYPE_ARP, (void*) arp, sizeof(struct arp_packet));
 
 }
 
@@ -277,8 +307,14 @@ virtio_net_intr(){
     // Used buffer notification
     if (reason & 0x1) {
         int index = net_card.receive.device->idx;
-        pr_debug("%i\n", index);
+        pr_debug("%d\n", index);
+        pr_debug("%p\n", net_card.receive.device->ring[0]);
         *R(VIRTIO_MMIO_INTERRUPT_ACK) = 0x1;
+        struct virtio_net_hdr* ptr;
+        ptr = (struct virtio_net_hdr*) net_card.receive.desc->addr;
+        pr_emerg("addr:%p, buffs: %d, hdr_size: %d\n",ptr,ptr->num_buffers, ptr->hdr_len);
+        struct ethernet_header* hdr = (struct ethernet_header*) (net_card.receive.desc->addr + sizeof(struct virtio_net_hdr));
+        pr_emerg("ether: %d\n", hdr->len);
     } 
     // Both can happen in the same interrupt
     if (reason & 0x2) { // Config change

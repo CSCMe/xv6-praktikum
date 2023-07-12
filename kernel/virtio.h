@@ -10,7 +10,9 @@ extern "C" {
 #endif
 
 #include "kernel/types.h"
+#include "kernel/net.h"
 
+#define VIRTIO_NET_USER_MODE
 
 //
 // virtio device definitions.
@@ -164,7 +166,7 @@ struct virtio_blk_req {
 
 // net config
 struct virtio_net_config { 
-  uint8 mac[6]; 
+  uint8 mac[MAC_ADDR_SIZE]; 
   uint16 status; 
   uint16 max_virtqueue_pairs; 
   uint16 mtu;   // unused
