@@ -248,19 +248,21 @@ virtio_net_init(void)
     *R(VIRTIO_MMIO_STATUS) = status;
 
     // Read config
-    uint32 config_gen = *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION);
     struct virtio_net_config config = {0};
-    uint32* config_smol = (uint32*) &config;
 
-    for (int i = 0; i < sizeof(struct virtio_net_config) / sizeof(uint32); i++) {
-        *(config_smol + i) = *(R(VIRTIO_MMIO_DEVICE_CONFIG) + i);
-    }
+    // The config generation identifies a specific set of configuration parameters.
+    // This protects us from race conditions if someone else modifies the config
+    // while we are (not-atomically) reading it.
+    uint32 config_gen;
+    do {
+      config_gen = *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION);
+      uint32 *config_smol = (uint32 *)&config;
+      for (int i = 0; i < sizeof(struct virtio_net_config) / sizeof(uint32); i++) {
+          *(config_smol + i) = *(R(VIRTIO_MMIO_DEVICE_CONFIG) + i);
+      }
+    } while (config_gen != *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION));
 
-    if (config_gen != *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION)) {
-        panic("net device config fail");
-    }
-
-    memmove((void*) net_card.mac_addr, (void*) config.mac, MAC_ADDR_SIZE);
+    memmove((void *)net_card.mac_addr, (void *)config.mac, MAC_ADDR_SIZE);
     // We have a mac address!
     debug_mac_addr(net_card.mac_addr);
     // Config reading done
