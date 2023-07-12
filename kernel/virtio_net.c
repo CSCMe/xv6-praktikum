@@ -165,7 +165,7 @@ virtio_net_init(void)
         *R(VIRTIO_MMIO_VERSION) != 2 ||
         *R(VIRTIO_MMIO_DEVICE_ID) != 1 || // Net device has ID 1
         *R(VIRTIO_MMIO_VENDOR_ID) != 0x554d4551){
-        panic("could not find virtio disk");
+        panic("could not find virtio net");
     }
     
     // reset device
