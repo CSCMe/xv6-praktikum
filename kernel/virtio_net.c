@@ -59,6 +59,7 @@ static struct net_card {
 } net_card;
 
 void debug_available_features(uint64 features) {
+  pr_debug("RAW features:%p\n", features);
   pr_debug("virtio-net available features:\n");
   if (features & ((uint64)1 << VIRTIO_NET_F_CSUM)) pr_debug("VIRTIO_NET_F_CSUM\n");
   if (features & ((uint64)1 << VIRTIO_NET_F_GUEST_CSUM)) pr_debug("VIRTIO_NET_F_GUEST_CSUM\n");
@@ -132,7 +133,6 @@ virtio_net_init(void)
       panic("virtio-net device does not supply a MAC address");
     if (!(features & (1 << VIRTIO_NET_F_STATUS)))
       panic("virtio-net device does not support configuration via the status register");
-
     // Complete feature negotiation
     *R(VIRTIO_MMIO_DRIVER_FEATURES) = features;
     status |= VIRTIO_CONFIG_S_FEATURES_OK;
@@ -143,22 +143,6 @@ virtio_net_init(void)
         panic("virtio net feature negotiation failed");
     }
 
-    // Read config
-    uint32 config_gen = *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION);
-    struct virtio_net_config config = {0};
-    uint32* config_smol = (uint32*) &config;
-    for (int i = 0; i < sizeof(struct virtio_net_config) / sizeof(uint32); i++) {
-        *(config_smol + i) = *(R(VIRTIO_MMIO_DEVICE_CONFIG) + i);
-    }
-
-    if (config_gen != *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION)) {
-        panic("net device config fail");
-    }
-
-    // We have a mac address!
-    debug_mac_addr(config.mac);
-
-    // Config reading done
 
     // Init virt queues
     #define NUM_QUEUES 3
@@ -202,6 +186,65 @@ virtio_net_init(void)
     // Queues are ready
     *R(VIRTIO_MMIO_STATUS) = status;
 
+        // Read config
+    uint32 config_gen = *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION);
+    struct virtio_net_config config = {0};
+    uint32* config_smol = (uint32*) &config;
+    for (int i = 0; i < sizeof(struct virtio_net_config) / sizeof(uint32); i++) {
+        *(config_smol + i) = *(R(VIRTIO_MMIO_DEVICE_CONFIG) + i);
+    }
+
+    if (config_gen != *R(VIRTIO_MMIO_DEVICE_CONFIG_GENERATION)) {
+        panic("net device config fail");
+    }
+
+    // We have a mac address!
+    debug_mac_addr(config.mac);
+
+    // Config reading done
+    pr_debug("status:%p\n", config.status);
+
+    uint8* buf = kalloc_zero();
+
+
+    struct virtio_net_hdr* package_header = (struct virtio_net_hdr*) buf;
+    package_header->num_buffers = 0;
+    package_header->flags = 0;
+    package_header->hdr_len = VIRTIO_NET_HDR_GSO_NONE;
+    package_header->hdr_len = sizeof(package_header);
+    pr_debug("makgin packi");
+    struct ethernet_frame {
+      uint8 dest[6];
+      uint8 src[6];
+      uint16 len; // gets ignored by virtio. uses desc->len instead
+      uint8 data[64];
+      uint8 crc[4];
+      uint8 ipg[12];
+    };
+
+    struct ethernet_frame* my_data = (struct ethernet_frame*)(buf + sizeof(package_header));
+
+    uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    memmove((void*)my_data->dest, (void*)dest, 6);
+    memmove((void*)my_data->src, (void*) config.mac, 6);
+    my_data->len = 64;
+
+    uint8* data = my_data->data;
+    for (int i = 0; i < 64; i++)
+      data[i] = i;
+
+    for (int i = 0; i < 12; i++)
+      my_data->ipg[i] = 0;
+
+    net_card.transmit.desc->addr = (uint64) buf + sizeof(package_header); // We ignore package_header and it seems to work
+    net_card.transmit.desc->flags = 0;
+    net_card.transmit.desc->len = 128;
+    net_card.transmit.driver->idx = 0;
+    __sync_synchronize();
+    net_card.transmit.driver->idx++;
+    __sync_synchronize();
+
+  *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 1; // value is queue number
 
 }
 

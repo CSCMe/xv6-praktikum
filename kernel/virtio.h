@@ -135,6 +135,11 @@ typedef struct virtq_desc virtq_desc;
 typedef struct virtq_avail virtq_driver;
 typedef struct virtq_used virtq_device;
 
+
+/**
+ * Most likely using split virtqueues
+ * These have descriptor, available ring (in driver), used ring (in device) areas
+*/
 typedef struct __virt_queue {
   virtq_desc *desc;
   virtq_driver *driver;
