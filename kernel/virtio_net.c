@@ -108,6 +108,7 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   // Get Send Buffer
   void* buf = (void*) net_card.transmit.desc->addr;
   struct ethernet_header* eth_header;
+  struct ethernet_tailer* eth_tailer;
 
   // Fun with driver weirdness
   #ifdef VIRTIO_NET_USER_MODE
@@ -127,6 +128,14 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   memmove((void*) eth_header->src, (void*) net_card.mac_addr, MAC_ADDR_SIZE);
   // Set dest address
   memmove((void*) eth_header->dest, (void*) dest_mac, MAC_ADDR_SIZE);
+  // Copy data
+  memmove((void*) eth_header->data, data, data_length);
+
+  // Pad data if smaller than minimum data size
+  for (; data_length < ETHERNET_MIN_DATA_LEN; data_length++) {
+    eth_header->data[data_length] = 0;
+  }
+
 
   if (type == ETHERNET_TYPE_DATA) {
     eth_header->len  = data_length;
@@ -137,9 +146,12 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   // Convert type/length to little endian
   memreverse(&eth_header->type, sizeof(eth_header->type));
 
-  // Finally copy data
-  memmove((void*) eth_header->data, data, data_length);
-  
+  // Checksum operations
+  // Get location of tailer
+  eth_tailer = (struct ethernet_tailer*) (((uint8*) eth_header) + sizeof(struct ethernet_header) + data_length);
+  // Test: Write 5 in byte 0 of checksum. TODO: Add actual checksum calc
+  eth_tailer->crc[0] = 5;
+
   // Now interact with card
   acquire(&net_card.net_lock);
 
@@ -148,7 +160,10 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
 
   // Suppress buffer consumption interrupts *FOR NOR* TODO: REMOVE and handle these interrupts too
   net_card.transmit.driver->flags = VIRTQ_AVAIL_F_NO_INTERRUPT;
-  net_card.transmit.desc->len = eth_header->len;
+
+  // Calculate size of buffer
+  net_card.transmit.desc->len = ((uint64)eth_tailer + sizeof(struct ethernet_tailer) - (uint64)buf);
+
   __sync_synchronize();
   net_card.transmit.driver->idx++;
   __sync_synchronize();

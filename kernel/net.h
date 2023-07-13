@@ -14,8 +14,9 @@ extern "C" {
 #define IP_ADDR_SIZE 4
 #define MAC_ADDR_SIZE 6
 
-// End of valid frame len values
-#define ETHERNET_MAX_FRAME_LEN 1500
+// Minimum data length of ethernet packet
+#define ETHERNET_MIN_DATA_LEN 46
+#define ETHERNET_CRC_LEN 4
 
 // All in big endian
 enum EtherType {
@@ -31,7 +32,7 @@ enum EtherType {
 struct ethernet_header {
     uint8 dest[MAC_ADDR_SIZE];
     uint8 src[MAC_ADDR_SIZE];
-    // Len/Type/VLAN field. Gets ignored by card. Set in desc->len instead. Still useful for bookkeeping
+    // Len/Type field sent with the packet
     union {
         // Length of Ethernet frame. Valid values 0-1500   CONVERTED TO LITTLE ENDIAN
         uint16 len;
@@ -39,6 +40,15 @@ struct ethernet_header {
         uint16 type;
     }; 
     uint8 data[]; // Data array of unspecified length
+};
+
+
+/**
+ * Tailer of ethernet frame
+ * Contains CRC Checksum
+*/
+struct ethernet_tailer {
+    uint8 crc[ETHERNET_CRC_LEN];
 };
 
 
