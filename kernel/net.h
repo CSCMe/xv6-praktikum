@@ -106,8 +106,30 @@ struct arp_packet {
     uint8 ip_dest[IP_ADDR_SIZE];
 };
 
-#define ARP_PACKET_SIZE sizeof(struct arp_packet)
+/**
+ * IPv4 header for an IPv4 packet
+ * Without options/padding
+*/
 
+struct ipv4_header {
+    struct {
+        uint8 version : 4;
+        uint8 header_length : 4;
+    };
+    uint8 type_of_service;
+    uint16 total_length;
+    uint16 identified;
+    struct {
+        uint16 flags : 3;
+        uint16 fragment_offset : 13;
+    };
+    uint8 time_to_live;
+    uint8 protocol;
+    uint16 header_checksum;
+    uint8 src[IP_ADDR_SIZE];
+    uint8 dst[IP_ADDR_SIZE];
+    uint8 data[];
+};
 
 #ifdef __cplusplus
 }

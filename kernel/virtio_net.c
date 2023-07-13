@@ -101,9 +101,12 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
 {
 
   if (data_length > PGSIZE - sizeof(struct virtio_net_hdr) - sizeof(struct ethernet_header)) {
-    pr_info("Can't send package in one go. Abort");
+    pr_info("Can't send packet in one go. Abort");
     return;
   }
+
+  // Now interact with card
+  acquire(&net_card.net_lock);
 
   // Get Send Buffer
   void* buf = (void*) net_card.transmit.desc->addr;
@@ -152,10 +155,6 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   // Test: Write 5 in byte 0 of checksum. TODO: Add actual checksum calc
   eth_tailer->crc[0] = 5;
 
-  // Now interact with card
-  acquire(&net_card.net_lock);
-
-  net_card.transmit.desc->addr = (uint64) buf; // We ignore package_header and it seems to work
   net_card.transmit.desc->flags = 0;
 
   // Suppress buffer consumption interrupts *FOR NOR* TODO: REMOVE and handle these interrupts too
@@ -170,6 +169,36 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 1; // value is queue number
 
   release(&net_card.net_lock);
+}
+/*
+void
+test_send_ip()
+{
+  struct ipv4_header actual_ip_header = {0};
+  struct ipv4_headaer* ipv4_header = &actual_ip_header;
+}*/
+
+void
+test_send_arp()
+{
+    struct arp_packet actual_arp = {0};
+    struct arp_packet* arp = &actual_arp;
+    arp->hw_type = ARP_HW_TYPE_ETHERNET;
+    arp->prot_type = ARP_PROT_TYPE_IP;
+    arp->hlen = ARP_HLEN_48_MAC;
+    arp->plen = ARP_PLEN_32_IP;
+    arp->opcode = ARP_OPCODE_REQ;
+
+    memmove((void*) arp->mac_src, net_card.mac_addr, 6);
+    uint8 ipme[8] = {10, 0, 2, 15};
+    memmove((void*) arp->ip_src, ipme, 4);
+    uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    memmove((void*)arp->mac_dest, dest, 6);
+    uint8 ipdest[8] = {10, 0, 2, 2};
+    memmove((void*) arp->ip_dest, ipdest, 4);
+
+    
+    send_ethernet_packet(dest, ETHERNET_TYPE_ARP, (void*) arp, sizeof(struct arp_packet));
 }
 
 void
@@ -290,36 +319,7 @@ virtio_net_init(void)
   // Exposes receive buffer to card
   net_card.receive.driver->idx++;
 
-    struct arp_packet {
-      uint16 net_type;
-      uint16 prot_type;
-      uint8 hlen;
-      uint8 plen;
-      uint16 opcode;
-      uint8 mac_src[6];
-      uint8 ip_src[4];
-      uint8 mac_dest[6];
-      uint8 ip_dest[4];
-    } actual_arp;
-
-    struct arp_packet* arp = &actual_arp;
-    arp->net_type = 1 << 8;
-    arp->prot_type =  (uint16)2048 >> 8;
-    arp->hlen = 6;
-    arp->plen = 4;
-    arp->opcode = 1;
-
-    memreverse((void*) &arp->opcode, sizeof(arp->opcode));
-    memmove((void*) arp->mac_src, net_card.mac_addr, 6);
-    uint8 ipme[8] = {10, 0, 2, 15};
-    memmove((void*) arp->ip_src, ipme, 4);
-    uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    memmove((void*)arp->mac_dest, dest, 6);
-    uint8 ipdest[8] = {10, 0, 2, 2};
-    memmove((void*) arp->ip_dest, ipdest, 4);
-
-
-    send_ethernet_packet(dest, ETHERNET_TYPE_ARP, (void*) arp, sizeof(struct arp_packet));
+  test_send_arp();
 
 }
 
