@@ -145,6 +145,9 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
 
   net_card.transmit.desc->addr = (uint64) buf; // We ignore package_header and it seems to work
   net_card.transmit.desc->flags = 0;
+
+  // Suppress buffer consumption interrupts *FOR NOR* TODO: REMOVE and handle these interrupts too
+  net_card.transmit.driver->flags = VIRTQ_AVAIL_F_NO_INTERRUPT;
   net_card.transmit.desc->len = eth_header->len;
   __sync_synchronize();
   net_card.transmit.driver->idx++;
@@ -268,6 +271,10 @@ virtio_net_init(void)
     // Config reading done
     pr_debug("status:%p\n", config.status);
 
+  // Temporarily in this location
+  // Exposes receive buffer to card
+  net_card.receive.driver->idx++;
+
     struct arp_packet {
       uint16 net_type;
       uint16 prot_type;
@@ -293,7 +300,7 @@ virtio_net_init(void)
     memmove((void*) arp->ip_src, ipme, 4);
     uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     memmove((void*)arp->mac_dest, dest, 6);
-    uint8 ipdest[8] = {10, 0, 2, 3};
+    uint8 ipdest[8] = {10, 0, 2, 2};
     memmove((void*) arp->ip_dest, ipdest, 4);
 
 
@@ -316,7 +323,11 @@ virtio_net_intr(){
         ptr = (struct virtio_net_hdr*) net_card.receive.desc->addr;
         pr_emerg("addr:%p, buffs: %d, hdr_size: %d\n",ptr,ptr->num_buffers, ptr->hdr_len);
         struct ethernet_header* hdr = (struct ethernet_header*) (net_card.receive.desc->addr + sizeof(struct virtio_net_hdr));
-        pr_emerg("ether: %d\n", hdr->len);
+        pr_emerg("ether: from:", hdr->len);
+        debug_mac_addr(hdr->src);
+        pr_emerg("\n to:");
+        debug_mac_addr(hdr->dest);
+        pr_emerg("\n");
     } 
     // Both can happen in the same interrupt
     if (reason & 0x2) { // Config change

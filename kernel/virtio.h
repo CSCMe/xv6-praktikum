@@ -109,9 +109,13 @@ struct virtq_desc {
 #define VRING_DESC_F_NEXT  1 // chained with another descriptor
 #define VRING_DESC_F_WRITE 2 // device writes (vs read)
 
+
+#define VIRTQ_AVAIL_F_NO_INTERRUPT 1
+
 // the (entire) avail ring, from the spec.
 struct virtq_avail {
-  uint16 flags; // always zero
+  // Usually zero, set to VIRTQ_AVAIL_F_NO_INTERRUPT to suppress interrupt on buffer consumption
+  uint16 flags; 
   uint16 idx;   // driver will write ring[idx] next
   uint16 ring[NUM]; // descriptor numbers of chain heads
   uint16 unused;
@@ -124,8 +128,11 @@ struct virtq_used_elem {
   uint32 len;
 };
 
+#define VIRTQ_USED_F_NO_NOTIFY  1 
+
 struct virtq_used {
-  uint16 flags; // always zero
+  // Usually zero, set to VIRTQ_USED_F_NO_NOTIFY to supress notification on buffer return
+  uint16 flags;
   uint16 idx;   // device increments when it adds a ring[] entry
   struct virtq_used_elem ring[NUM];
 };
