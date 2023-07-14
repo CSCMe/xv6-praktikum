@@ -29,6 +29,13 @@ extern "C" {
 #define IP_PROT_UDP     0x11
 #define IP_PROT_TESTING 0xFD
 
+typedef union __ip_address {
+    uint8 octets[IP_ADDR_SIZE];
+    uint32 value;
+} ip_address;
+
+void print_ip(ip_address ip);
+
 /**
  * IPv4 header for an IPv4 packet
  * No support for options/padding
@@ -91,9 +98,9 @@ struct ipv4_header {
     // Header checksum. 0 for sake of calculation. CONVERT TO BIG ENDIAN (?)
     uint16 header_checksum;
     // Source IP-Addr
-    uint8 src[IP_ADDR_SIZE];
+    ip_address src;
     // Dest IP-Addr
-    uint8 dst[IP_ADDR_SIZE];
+    ip_address dst;
     // Contained data
     uint8 data[];
 };
