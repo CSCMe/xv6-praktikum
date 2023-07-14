@@ -11,6 +11,7 @@
 #include "virtio.h"
 #include "net/net.h"
 #include "net/ip.h" // TODO: REMOVE
+#include "net/arp.h"
 
 // the address of virtio mmio register r.
 #define R(r) ((volatile uint32 *)(VIRTIO1 + (r)))
@@ -255,10 +256,11 @@ virtio_net_init(void)
   // Temporarily in this location
   // Exposes receive buffer to card
   net_card.receive.driver->idx++;
-
+  test_send_arp();
   test_send_ip();
 
 }
+
 
 
 void
@@ -267,19 +269,33 @@ virtio_net_intr(){
     int reason = *R(VIRTIO_MMIO_INTERRUPT_STATUS);
     // Used buffer notification
     if (reason & 0x1) {
+        *R(VIRTIO_MMIO_INTERRUPT_ACK) = 0x1;
+
         int index = net_card.receive.device->idx;
         pr_debug("%d\n", index);
         pr_debug("%p\n", net_card.receive.device->ring[0]);
-        *R(VIRTIO_MMIO_INTERRUPT_ACK) = 0x1;
+
         struct virtio_net_hdr* ptr;
         ptr = (struct virtio_net_hdr*) net_card.receive.desc->addr;
-        pr_emerg("addr:%p, buffs: %d, hdr_size: %d\n",ptr,ptr->num_buffers, ptr->hdr_len);
-        struct ethernet_header* hdr = (struct ethernet_header*) (net_card.receive.desc->addr + sizeof(struct virtio_net_hdr));
-        pr_emerg("ether: from:", hdr->len);
-        debug_mac_addr(hdr->src);
-        pr_emerg("\n to:");
-        debug_mac_addr(hdr->dest);
-        pr_emerg("\n");
+        pr_emerg("buf addr:%p, bufs: %d, hdr_size: %d\n", ptr, ptr->num_buffers, ptr->hdr_len);
+
+        struct ethernet_header* ethernet_header = (struct ethernet_header*)((uint8*) ptr + sizeof(struct virtio_net_hdr));
+        // Get connection identifier and correspondingbuffer
+        connection_identifier id = compute_identifier(ethernet_header);
+
+        connection_entry* entry = get_entry_for_identifier(id);
+
+        if (entry != NULL) {
+          copy_data_to_entry(entry, ethernet_header);
+          // Do something with wakeup or smth
+          entry->signal = 1;
+          wakeup(&entry->signal);
+        } else {
+          pr_notice("Dropping unexpected packet: Protocol:%x\n", id.protocol);
+        }
+
+        // Hand used buffer back to card
+        net_card.receive.driver->idx++;
     } 
     // Both can happen in the same interrupt
     if (reason & 0x2) { // Config change

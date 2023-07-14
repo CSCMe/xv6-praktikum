@@ -11,49 +11,61 @@ extern "C" {
 
 #include "kernel/types.h"
 #include "kernel/defs.h"
+#include "kernel/net/netdefs.h"
+#include "kernel/net/ethernet.h"
 
-#define MAC_ADDR_SIZE 6
-#define IP_ADDR_SIZE 4
+#define MAX_TRACKED_CONNECTIONS 16
 
-// Minimum data length of ethernet packet
-#define ETHERNET_MIN_DATA_LEN 46
-#define ETHERNET_CRC_LEN 4
-
-// In wrong Endian. Convert type field before send
-enum EtherType {
-    ETHERNET_TYPE_DATA  = 0x0000,
-    ETHERNET_TYPE_IPv4   = 0x0800,
-    ETHERNET_TYPE_ARP    = 0x0806,
+enum protocol {
+    CON_UNKNOWN = 0,
+    CON_ARP = 1,
+    CON_TCP = 2,
+    CON_UDP = 3,
+    CON_DHCP = 4,
+    CON_ICMP = 5,
 };
 
 /**
- * All the values that actually matter to the card.
- * We don't support VLAN
+ * Identifier for a specific connection. 
+ * Used to get buffer from connections array to wake/notify waiting processes and supply received data
 */
-struct ethernet_header {
-    uint8 dest[MAC_ADDR_SIZE];
-    uint8 src[MAC_ADDR_SIZE];
-    // Len/Type field sent with the packet
-    union {
-        // Length of Ethernet frame. Valid values 0-1500   CONVERTED TO BIG ENDIAN
-        uint16 len;
-        // Type of Ethernet frame. Valid values 1536-65535 CONVERTED TO BIG ENDIAN
-        uint16 type;
-    }; 
-    uint8 data[]; // Data array of unspecified length
-};
+typedef struct __connection_identifier {
+    uint16 protocol;
+    union __identification {
+        uint64 value;
+        struct arp {
+            uint8 ip_addr[IP_ADDR_SIZE];
+        } arp;
+        struct tcp {
+            uint8  dst_ip_addr[IP_ADDR_SIZE];
+            uint16 dst_port;
+            uint16 src_port;
+        } tcp;
+        struct udp {
+            uint8  dst_ip_addr[IP_ADDR_SIZE];
+            uint16 dst_port;
+            uint16 src_port;
+        } udp;
+        struct dhcp {
+            uint32 transaction_id;
+        } dhcp;
+        struct icmp {
+            uint32 sequence_num;
+        } icmp;
+    } identification;
+} connection_identifier;
 
+typedef struct __connections_entry {
+    // Signal. 0 if buffer empty/waiting
+    uint32 signal; 
+    connection_identifier identifier;
+    void* buf;
+} connection_entry;
 
-/**
- * Tailer of ethernet frame
- * Contains CRC Checksum
-*/
-struct ethernet_tailer {
-    uint8 crc[ETHERNET_CRC_LEN];
-};
-
+connection_identifier compute_identifier(struct ethernet_header* ethernet_header);
 void copy_card_mac(uint8 copy_to[MAC_ADDR_SIZE]);
-void send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* data, uint16 data_length);
+connection_entry* get_entry_for_identifier(connection_identifier id);
+void copy_data_to_entry(connection_entry* entry, struct ethernet_header* ethernet_header);
 void net_init();
 
 #ifdef __cplusplus

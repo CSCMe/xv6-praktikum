@@ -225,10 +225,8 @@ devintr()
     if(irq == UART0_IRQ){
       uartintr();
     } else if(irq == VIRTIO0_IRQ){
-      pr_debug("disk\n");
       virtio_disk_intr();
     } else if (irq == VIRTIO1_IRQ){
-      pr_debug("net\n");
       virtio_net_intr();
     } else if(irq){
       pr_notice("unexpected interrupt irq=%d\n", irq);
