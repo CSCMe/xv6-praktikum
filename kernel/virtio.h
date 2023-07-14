@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 #include "kernel/types.h"
-#include "kernel/net.h"
+#include "kernel/net/net.h"
 
 #define VIRTIO_NET_USER_MODE
 

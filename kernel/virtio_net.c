@@ -9,7 +9,8 @@
 #include "memlayout.h"
 #include "buf.h"
 #include "virtio.h"
-#include "net.h"
+#include "net/net.h"
+#include "net/ip.h" // TODO: REMOVE
 
 // the address of virtio mmio register r.
 #define R(r) ((volatile uint32 *)(VIRTIO1 + (r)))
@@ -21,45 +22,11 @@ static struct net_card {
     uint8 mac_addr[MAC_ADDR_SIZE];
 
     struct spinlock net_lock;
-
-/*
-  // a set (not a ring) of DMA descriptors, with which the
-  // driver tells the device where to read and write individual
-  // disk operations. there are NUM descriptors.
-  // most commands consist of a "chain" (a linked list) of a couple of
-  // these descriptors.
-  struct virtq_desc *desc;
-
-  // a ring in which the driver writes descriptor numbers
-  // that the driver would like the device to process.  it only
-  // includes the head descriptor of each chain. the ring has
-  // NUM elements.
-  struct virtq_avail *avail;
-
-  // a ring in which the device writes descriptor numbers that
-  // the device has finished processing (just the head of each chain).
-  // there are NUM used ring entries.
-  struct virtq_used *used;
-
-  // our own book-keeping.
-  char free[NUM];  // is a descriptor free?
-  uint16 used_idx; // we've looked this far in used[2..NUM].
-
-  // track info about in-flight operations,
-  // for use when completion interrupt arrives.
-  // indexed by first descriptor index of chain.
-  struct {
-    int in_use;
-    struct buf *b;
-    char status;
-  } info[NUM];
-
-  // disk command headers.
-  // one-for-one with descriptors, for convenience.
-  struct virtio_net_req ops[NUM];
-  
-  */
 } net_card;
+
+void copy_card_mac(uint8 copy_to[MAC_ADDR_SIZE]) {
+  memmove(copy_to, net_card.mac_addr, MAC_ADDR_SIZE);
+}
 
 void debug_available_features(uint64 features) {
   pr_debug("RAW features:%p\n", features);
@@ -169,52 +136,6 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   *R(VIRTIO_MMIO_QUEUE_NOTIFY) = 1; // value is queue number
 
   release(&net_card.net_lock);
-}
-
-void
-test_send_ip()
-{
-  struct ipv4_header actual_ip_header = {0};
-  struct ipv4_header* packet = &actual_ip_header;
-
-  uint8 ipdest[8] = {10, 0, 2, 3};
-  memmove((void*) packet->dst, ipdest, 4);
-  uint8 ipme[8] = {10, 0, 2, 15};
-  memmove((void*) packet->src, ipme, 4);
-  packet->total_length = 20;
-  memreverse(&packet->total_length, sizeof(packet->total_length));
-  packet->header_length = 5;
-  packet->protocol = IP_PROT_TESTING;
-  packet->time_to_live = 64;
-  packet->version = IP_VERSION_4;
-  packet->flags = 0;
-  memreverse(&packet->flags_fragment_mixed, 2);
-  //packet->fragment_offset = 4096;
-  uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-  send_ethernet_packet(dest, ETHERNET_TYPE_IPv4, (void*) packet, sizeof(struct ipv4_header));
-}
-
-void
-test_send_arp()
-{
-    struct arp_packet actual_arp = {0};
-    struct arp_packet* arp = &actual_arp;
-    arp->hw_type = ARP_HW_TYPE_ETHERNET;
-    arp->prot_type = ARP_PROT_TYPE_IP;
-    arp->hlen = ARP_HLEN_48_MAC;
-    arp->plen = ARP_PLEN_32_IP;
-    arp->opcode = ARP_OPCODE_REQ;
-
-    memmove((void*) arp->mac_src, net_card.mac_addr, 6);
-    uint8 ipme[8] = {10, 0, 2, 15};
-    memmove((void*) arp->ip_src, ipme, 4);
-    uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    memmove((void*)arp->mac_dest, dest, 6);
-    uint8 ipdest[8] = {10, 0, 2, 2};
-    memmove((void*) arp->ip_dest, ipdest, 4);
-
-    
-    send_ethernet_packet(dest, ETHERNET_TYPE_ARP, (void*) arp, sizeof(struct arp_packet));
 }
 
 void

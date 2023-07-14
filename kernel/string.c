@@ -1,7 +1,7 @@
 #include "types.h"
 
 /**
- * Convert from big to little endian
+ * Convert from big to little endian & reverse
 */
 void
 memreverse(void* dst, uint n)
