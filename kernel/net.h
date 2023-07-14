@@ -18,7 +18,7 @@ extern "C" {
 #define ETHERNET_MIN_DATA_LEN 46
 #define ETHERNET_CRC_LEN 4
 
-// All in big endian
+// In wrong Endian. Convert type field before send
 enum EtherType {
     ETHERNET_TYPE_DATA  = 0x0000,
     ETHERNET_TYPE_IPv4   = 0x0800,
@@ -53,22 +53,22 @@ struct ethernet_tailer {
 
 
 /**
- * Defines for ARP packet fields. Little endian
+ * Defines for ARP packet fields. Endian preconverted
 */
 
-// ARP Ethernet hardware type  (Little Endian)
+// ARP Ethernet hardware type  (Endian preconverted)
 #define ARP_HW_TYPE_ETHERNET   (1 << 8)
-// ARP IEEE802.2 hardware type (Little Endian)
+// ARP IEEE802.2 hardware type (Endian preconverted)
 #define ARP_HW_TYPE_IEEE802    (1 << 6) 
-// ARP IPv4 protocol type      (Little Endian)
+// ARP IPv4 protocol type      (Endian preconverted)
 #define ARP_PROT_TYPE_IP       (2048 >> 8)
 // ARP HLEN value for 48 bit Mac Addr
 #define ARP_HLEN_48_MAC        6
 // ARP PLEN value for 32 bit IP Addr
 #define ARP_PLEN_32_IP         4
-// ARP opcode for request      (Little Endian)
+// ARP opcode for request      (Endian preconverted)
 #define ARP_OPCODE_REQ         (1 << 8)
-// ARP opcode for reply       (Little Endian)
+// ARP opcode for reply        (Endian preconverted)
 #define ARP_OPCODE_REPLY       (2 << 8)
 
 /**
@@ -149,7 +149,7 @@ struct ipv4_header {
     uint8 type_of_service;
     // Total length of IP packet in bytes. Includes data & header. CONVERT TO BIG ENDIAN!
     uint16 total_length;
-    // Unique number for IP fragmentation and reassembly. Just set to 0
+    // Unique number for IP fragmentation and reassembly. Just set to 0. CONVERT TO BIG ENDIAN!
     uint16 identification;
     /**
      * Union containing flags and fragment offset
