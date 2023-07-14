@@ -280,18 +280,10 @@ virtio_net_intr(){
         pr_emerg("buf addr:%p, bufs: %d, hdr_size: %d\n", ptr, ptr->num_buffers, ptr->hdr_len);
 
         struct ethernet_header* ethernet_header = (struct ethernet_header*)((uint8*) ptr + sizeof(struct virtio_net_hdr));
-        // Get connection identifier and correspondingbuffer
-        connection_identifier id = compute_identifier(ethernet_header);
 
-        connection_entry* entry = get_entry_for_identifier(id);
-
-        if (entry != NULL) {
-          copy_data_to_entry(entry, ethernet_header);
-          // Do something with wakeup or smth
-          entry->signal = 1;
-          wakeup(&entry->signal);
-        } else {
-          pr_notice("Dropping unexpected packet: Protocol:%x\n", id.protocol);
+        // Notify any waiting processes
+        if (notify_of_response(ethernet_header) != 0) {
+          pr_notice("Dropping unexpected packet.\n");
         }
 
         // Hand used buffer back to card

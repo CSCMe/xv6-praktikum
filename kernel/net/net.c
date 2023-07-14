@@ -3,12 +3,62 @@
 #include "kernel/net/net.h"
 
 static connection_entry connections[MAX_TRACKED_CONNECTIONS] = {0};
+static struct spinlock connections_lock = {0};
 
 void
 net_init()
 {
+    initlock(&connections_lock, "Connection Tracker Lock");
     arp_init();
     ip_init();
+}
+
+/**
+ * Wait for a response.
+ * Releases a held lock upon entering sleep mode to ensure no loss of response
+*/
+void
+wait_for_response(connection_identifier id, void* buf, struct spinlock* lock)
+{
+    acquire(&connections_lock);
+    release(lock);
+    for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
+        if (connections[i].signal == 0) {
+            connections[i].signal = 1;
+            connections[i].identifier = id;
+            connections[i].buf = buf;
+            // Sleep dinge. Wakeup on response
+            // Maybe replace with spin if reply not guaranteed
+            sleep(&connections[i].signal, &connections_lock);
+            // Reset structure
+            connections[i].signal = 0;
+            connections[i].identifier.identification.value = 0;
+            connections[i].buf = NULL;
+            release(&connections_lock);
+            return;
+        }
+    }
+    panic("No free slot for waiting for response\n");
+}
+
+int
+notify_of_response(struct ethernet_header* ethernet_header)
+{
+    connection_identifier id = compute_identifier(ethernet_header);
+    acquire(&connections_lock);
+    connection_entry* entry = get_entry_for_identifier(id);
+
+    if (entry != NULL) {
+        copy_data_to_entry(entry, ethernet_header);
+        // Wakeup
+        entry->signal = 2;
+        release(&connections_lock);
+        wakeup(&entry->signal);
+        return 0;
+    } else {
+        release(&connections_lock);
+        return -1;
+    }
 }
 
 connection_entry*

@@ -56,7 +56,7 @@ typedef struct __connection_identifier {
 } connection_identifier;
 
 typedef struct __connections_entry {
-    // Signal. 0 if buffer empty/waiting
+    // Signal. 0 if buffer empty, 1 waiting, 2 not waiting
     uint32 signal; 
     connection_identifier identifier;
     void* buf;
@@ -67,6 +67,8 @@ void copy_card_mac(uint8 copy_to[MAC_ADDR_SIZE]);
 connection_entry* get_entry_for_identifier(connection_identifier id);
 void copy_data_to_entry(connection_entry* entry, struct ethernet_header* ethernet_header);
 void net_init();
+int notify_of_response(struct ethernet_header* ethernet_header);
+void wait_for_response(connection_identifier id, void* buf, struct spinlock* lock);
 
 #ifdef __cplusplus
 }
