@@ -281,9 +281,12 @@ virtio_net_intr(){
 
         struct ethernet_header* ethernet_header = (struct ethernet_header*)((uint8*) ptr + sizeof(struct virtio_net_hdr));
 
-        // Notify any waiting processes
+        // Notify any waiting processes.
         if (notify_of_response(ethernet_header) != 0) {
-          pr_notice("Dropping unexpected packet.\n");
+          // Unexpected packet. Maybe establishing connection?
+          if(handle_incoming_connection(ethernet_header) != 0) {
+            pr_notice("Dropping unexpected packet.\n");
+          }
         }
 
         // Hand used buffer back to card

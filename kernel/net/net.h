@@ -67,6 +67,7 @@ void copy_card_mac(uint8 copy_to[MAC_ADDR_SIZE]);
 connection_entry* get_entry_for_identifier(connection_identifier id);
 void copy_data_to_entry(connection_entry* entry, struct ethernet_header* ethernet_header);
 void net_init();
+int handle_incoming_connection(struct ethernet_header* ethernet_header);
 int notify_of_response(struct ethernet_header* ethernet_header);
 void wait_for_response(connection_identifier id, void* buf, struct spinlock* lock);
 

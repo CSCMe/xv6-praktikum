@@ -42,6 +42,37 @@ wait_for_response(connection_identifier id, void* buf, struct spinlock* lock)
 }
 
 int
+handle_incoming_connection(struct ethernet_header* ethernet_header)
+{
+    uint16 type = ethernet_header->type;
+    memreverse(&type, sizeof(type));
+    switch (type)
+    {
+        case ETHERNET_TYPE_ARP:
+            // arp_reply_request() function in arp.c not defined, feel free to change name
+            break;
+        case ETHERNET_TYPE_IPv4:
+            struct ipv4_header* ipv4_header = (struct ipv4_header*) ( (uint8*) ethernet_header + sizeof(struct ethernet_header));
+            switch (ipv4_header->protocol)
+            {
+                case IP_PROT_TCP:
+                    pr_notice("Unpromted not implemented: Dropping TCP\n");
+                    break;
+                case IP_PROT_UDP:
+                    pr_notice("Unpromted not implemented: Dropping UDP\n");
+                    break;
+                default:
+                    pr_notice("Does not support unprompted connection with protocol: %x\n", ipv4_header->protocol);
+                    break;
+            }
+            break;
+        default:
+            break;
+    }
+    return -1;
+}
+
+int
 notify_of_response(struct ethernet_header* ethernet_header)
 {
     connection_identifier id = compute_identifier(ethernet_header);
@@ -109,8 +140,9 @@ connection_identifier
 compute_identifier(struct ethernet_header* ethernet_header)
 {
     connection_identifier id = {0};
-    memreverse(&ethernet_header->type, sizeof(ethernet_header->type));
-    switch (ethernet_header->type)
+    uint16 type = ethernet_header->type;
+    memreverse(&type, sizeof(type));
+    switch (type)
     {
         case ETHERNET_TYPE_ARP:
             struct arp_packet* arp_packet = (struct arp_packet*) ( (uint8*) ethernet_header + sizeof(struct ethernet_header));
