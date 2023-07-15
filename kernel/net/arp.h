@@ -12,6 +12,20 @@
 extern "C" {
 #endif
 
+#define NUM_ARP_TABLE_ENTRIES 16
+
+typedef struct __arp_table_entry {
+  uint8 is_valid;
+  char ip_addr[IP_ADDR_SIZE];
+  char mac_addr[MAC_ADDR_SIZE];
+} arp_table_entry;
+
+// Returns 1 if the ip was found in the ARP table, 0 otherwise.
+// If 1 was returned, the corresponding MAC address was written to the
+// second parameter
+uint8 arp_table_lookup(uint8 ip_addr[], uint8 write_mac_addr_to[]);
+
+void arp_table_insert(uint8 ip_addr[], uint8 mac_addr[]);
 
 /**
  * Defines for ARP packet fields. Endian preconverted

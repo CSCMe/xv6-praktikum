@@ -2,11 +2,55 @@
 
 static struct spinlock arp_lock = {0};
 
+static struct __arp_table {
+  uint index;
+  arp_table_entry entries[NUM_ARP_TABLE_ENTRIES];
+} arp_table;
+
 void arp_init() {
-    initlock(&arp_lock, "ARP lock");
+  initlock(&arp_lock, "ARP lock");
+
+  // Initialize the ARP table
+  for (int i = 0; i < NUM_ARP_TABLE_ENTRIES; i++) { arp_table.entries[i].is_valid = 0; }
+  arp_table.index = 0;
+}
+
+uint8 arp_table_lookup(uint8 ip_addr[], uint8 write_mac_addr_to[]) {
+  for (int i = 0; i < NUM_ARP_TABLE_ENTRIES; i++) {
+    if (arp_table.entries[i].is_valid) {
+      if (memcmp(ip_addr, arp_table.entries[i].ip_addr, IP_ADDR_SIZE) == 0) {
+        // Found our entry
+        memmove(write_mac_addr_to, arp_table.entries[i].mac_addr, IP_ADDR_SIZE);
+        return 1;
+      }
+    }
+  }
+
+  // Entry not found
+  return 0;
+}
+
+// Since we never remove entries from the table (TTL is not respected,
+// due to a complete lack of time in the kernel)
+// insertion is quite simple, we simply replace the oldest element
+void arp_table_insert(uint8 ip_addr[], uint8 mac_addr[]) {
+  arp_table.entries[arp_table.index].is_valid = 1;
+  memmove(arp_table.entries[arp_table.index].ip_addr, ip_addr, IP_ADDR_SIZE);
+  memmove(arp_table.entries[arp_table.index].mac_addr, mac_addr, MAC_ADDR_SIZE);
+
+  arp_table.index += 1;
+  arp_table.index %= NUM_ARP_TABLE_ENTRIES;
 }
 
 void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
+  uint8 cached = 0;
+
+  // Check if the ARP table has the mac address cached
+  if (arp_table_lookup(ip_addr, mac_addr)) {
+    cached = 1;
+    goto log_result;
+  }
+
   struct arp_packet arp;
   arp.hw_type   = ARP_HW_TYPE_ETHERNET;
   arp.prot_type = ARP_PROT_TYPE_IP;
@@ -26,7 +70,7 @@ void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
   // to our request.
   // In the case of ARP, the identifier is simply the target IP address
   connection_identifier token = {0};
-  token.protocol                           = CON_ARP;
+  token.protocol              = CON_ARP;
   memmove(token.identification.arp.target_ip, ip_addr, IP_ADDR_SIZE);
 
   // Acquire a lock so we don't get a response before we are waiting for it
@@ -37,11 +81,17 @@ void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
   wait_for_response(token, (void *)&arp_response, &arp_lock);
 
   memmove(mac_addr, arp_response.mac_src, MAC_ADDR_SIZE);
-  
+
+  // Store the result in the ARP table so we don't have to look it up again
+  arp_table_insert(ip_addr, mac_addr);
+
+log_result:
   pr_debug("resolved ");
   print_ip(ip_addr);
   pr_debug(" to ");
   print_mac_addr(mac_addr);
+  if (cached) pr_debug(" (cached)");
+  pr_debug("\n");
 }
 
 void test_send_arp() {
