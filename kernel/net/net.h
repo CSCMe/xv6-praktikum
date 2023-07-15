@@ -34,7 +34,7 @@ typedef struct __connection_identifier {
     union __identification {
         uint64 value;
         struct arp {
-            uint8 ip_addr[IP_ADDR_SIZE];
+          ip_address target_ip;
         } arp;
         struct tcp {
             uint8  dst_ip_addr[IP_ADDR_SIZE];
@@ -70,6 +70,8 @@ void net_init();
 int handle_incoming_connection(struct ethernet_header* ethernet_header);
 int notify_of_response(struct ethernet_header* ethernet_header);
 void wait_for_response(connection_identifier id, void* buf, struct spinlock* lock);
+
+void print_mac_addr(uint8 mac_addr[MAC_ADDR_SIZE]);
 
 #ifdef __cplusplus
 }

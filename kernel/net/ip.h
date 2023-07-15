@@ -29,11 +29,6 @@ extern "C" {
 #define IP_PROT_UDP     0x11
 #define IP_PROT_TESTING 0xFD
 
-typedef union __ip_address {
-    uint8 octets[IP_ADDR_SIZE];
-    uint32 value;
-} ip_address;
-
 void print_ip(ip_address ip);
 
 
@@ -112,6 +107,7 @@ struct ipv4_header {
 void test_send_ip();
 void ip_init();
 void send_ipv4_packet(ip_address destination, uint8 ip_protocol, void* data, uint16 data_length);
+void copy_ip_addr(ip_address *copy_to);
 
 #ifdef __cplusplus
 }

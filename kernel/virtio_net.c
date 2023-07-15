@@ -59,11 +59,6 @@ void debug_available_features(uint64 features) {
   pr_debug("\n");
 }
 
-void debug_mac_addr(uint8 mac_addr[MAC_ADDR_SIZE]) {
-    pr_debug("MAC Address: %x:%x:%x:%x:%x:%x\n", 
-        mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
-}
-
 void
 send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* data, uint16 data_length)
 {
@@ -249,13 +244,15 @@ virtio_net_init(void)
 
     memmove((void *)net_card.mac_addr, (void *)config.mac, MAC_ADDR_SIZE);
     // We have a mac address!
-    debug_mac_addr(net_card.mac_addr);
+    pr_debug("Our ");
+    print_mac_addr(net_card.mac_addr);
     // Config reading done
     pr_debug("status:%p\n", config.status);
 
   // Temporarily in this location
   // Exposes receive buffer to card
   net_card.receive.driver->idx++;
+
   net_init();
 }
 
