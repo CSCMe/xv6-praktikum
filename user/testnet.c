@@ -3,5 +3,8 @@
 
 void main (int argc, char** argv)
 {
-    net_test();
+    // Fork to not hang terminal if networking goes wrong
+    // (which it inevitably does ^^ )
+    if (fork() == 0)
+        net_test();
 }
