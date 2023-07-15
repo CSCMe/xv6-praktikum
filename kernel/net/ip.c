@@ -1,4 +1,5 @@
 #include "kernel/net/ip.h"
+#include "kernel/net/arp.h"
 
 static ip_address our_ip_address;
 
@@ -9,35 +10,82 @@ void print_ip(ip_address ip) {
 void
 copy_ip_addr(ip_address *copy_to)
 {
-  memmove(&copy_to->octets, our_ip_address.octets, IP_ADDR_SIZE);
+  memmove(copy_to->octets, our_ip_address.octets, IP_ADDR_SIZE);
 }
 
 void
 ip_init()
 {
+  ip_address starting_ip = {.octets={10,0,2,15}};
+  memmove(our_ip_address.octets, starting_ip.octets, sizeof(ip_address));
+}
 
+void
+send_ipv4_packet(ip_address destination, uint8 ip_protocol, void* data, uint16 data_length)
+{
+  if (data_length > PGSIZE - sizeof(struct ipv4_header)) {
+    pr_info("Send IP: Can't fit data into page. Aborting\n");
+    return;
+  }
+
+  void* buf = kalloc_zero();
+  if (!buf)
+    panic("send ip kalloc");
+
+  struct ipv4_header* header = (struct ipv4_header*) buf;
+
+  // Set header length
+  header->header_length = (sizeof(struct ipv4_header) * 8) / 32;
+  // Set version
+  header->version = IP_VERSION_4;
+
+  // No special service
+  header->type_of_service = 0;
+
+  // Set total_length
+  header->total_length = (sizeof(struct ipv4_header)) + data_length;
+  memreverse(&header->total_length, sizeof(header->total_length));
+  
+  // No identification needed, no fragmentation
+  header->identification = 0;
+
+  // No fragment offset;
+  header->fragment_offset = 0;
+  // No flags for now
+  header->flags = 0;
+  memreverse(&header->flags_fragment_mixed, sizeof(header->flags_fragment_mixed));
+  
+  // Set time to live to default value
+  header->time_to_live = IPv4_TTL_DEFAULT;
+
+  // Set protocol
+  header->protocol = ip_protocol;
+
+  // No checksum for now. TODO: Add calculation
+  header->header_checksum = 0;
+
+  // Copy own IP-Address
+  copy_ip_addr(&header->src);
+
+  // Copy destination IP-Address
+  memmove(header->dst.octets, destination.octets, sizeof(ip_address));
+
+  // Copy data
+  memmove(header->data, data, data_length);
+
+  // Default mac is broadcast
+  uint8 mac_dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  //get_mac_for_ip(mac_dest, &header->dst); // TODO: implement
+  send_ethernet_packet(mac_dest, ETHERNET_TYPE_IPv4, buf, (sizeof(struct ipv4_header)) + data_length);
+  // Don't forget to free temp buffer at the end
+  kfree(buf);
 }
 
 
 void
 test_send_ip()
 {
-  struct ipv4_header actual_ip_header = {0};
-  struct ipv4_header* packet = &actual_ip_header;
-
-  uint8 ipdest[IP_ADDR_SIZE] = {10, 0, 2, 3};
-  memmove((void*) &packet->dst.octets, ipdest, 4);
-  uint8 ipme[IP_ADDR_SIZE] = {10, 0, 2, 15};
-  memmove((void*) &packet->src.octets, ipme, 4);
-  packet->total_length = 20;
-  memreverse(&packet->total_length, sizeof(packet->total_length));
-  packet->header_length = 5;
-  packet->protocol = IP_PROT_TESTING;
-  packet->time_to_live = 64;
-  packet->version = IP_VERSION_4;
-  packet->flags = 0;
-  memreverse(&packet->flags_fragment_mixed, 2);
-  //packet->fragment_offset = 4096;
-  uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-  send_ethernet_packet(dest, ETHERNET_TYPE_IPv4, (void*) packet, sizeof(struct ipv4_header));
+  uint8 data[] = {1,2,3,4,5,6,7,1,2,3,4,5,6,7,1,2,3,4,5,6,7};
+  ip_address dest = {.octets={10,0,2,2}};
+  send_ipv4_packet(dest, IP_PROT_TESTING, data, sizeof(data));
 }

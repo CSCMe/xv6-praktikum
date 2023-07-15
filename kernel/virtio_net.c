@@ -256,9 +256,7 @@ virtio_net_init(void)
   // Temporarily in this location
   // Exposes receive buffer to card
   net_card.receive.driver->idx++;
-  test_send_arp();
-  test_send_ip();
-
+  net_init();
 }
 
 

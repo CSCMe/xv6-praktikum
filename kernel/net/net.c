@@ -11,6 +11,10 @@ net_init()
     initlock(&connections_lock, "Connection Tracker Lock");
     arp_init();
     ip_init();
+
+    
+    test_send_arp();
+    test_send_ip();
 }
 
 /**

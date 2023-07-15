@@ -36,6 +36,9 @@ typedef union __ip_address {
 
 void print_ip(ip_address ip);
 
+
+#define IPv4_TTL_DEFAULT 64
+
 /**
  * IPv4 header for an IPv4 packet
  * No support for options/padding
@@ -48,7 +51,7 @@ struct ipv4_header {
     struct {
         /**
          * Length of header
-         * Premultiplied by 32. Since we don't support options or padding it's always 5
+         * Amount of 32 bit segments in header
         */
         uint8 header_length : 4;
         /**
@@ -108,6 +111,7 @@ struct ipv4_header {
 
 void test_send_ip();
 void ip_init();
+void send_ipv4_packet(ip_address destination, uint8 ip_protocol, void* data, uint16 data_length);
 
 #ifdef __cplusplus
 }
