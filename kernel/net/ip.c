@@ -4,7 +4,7 @@
 static uint8 our_ip_address[IP_ADDR_SIZE];
 
 void print_ip(uint8 octets[]) {
-  pr_debug("IP: %d.%d.%d.%d\n", octets[0], octets[1], octets[2], octets[3]);
+  pr_debug("%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
 }
 
 void

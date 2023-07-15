@@ -31,11 +31,9 @@ wait_for_response(connection_identifier id, void* buf, struct spinlock* lock)
             connections[i].signal = 1;
             connections[i].identifier = id;
             connections[i].buf = buf;
-            pr_debug("going to sleep\n");
             // Sleep dinge. Wakeup on response
             // Maybe replace with spin if reply not guaranteed
             sleep(&connections[i].signal, &connections_lock);
-            pr_debug("woke up\n");
 
             // Reset structure
             connections[i].signal = 0;
@@ -153,7 +151,7 @@ compute_identifier(struct ethernet_header* ethernet_header)
     {
         case ETHERNET_TYPE_ARP:
             struct arp_packet* arp_packet = (struct arp_packet*) ( (uint8*) ethernet_header + sizeof(struct ethernet_header));
-            id.identification.arp.target_ip.value = arp_packet->ip_src.value;
+            memmove(id.identification.arp.target_ip, arp_packet->ip_src, IP_ADDR_SIZE);
             id.protocol = CON_ARP;
             break;
         case ETHERNET_TYPE_IPv4:
@@ -188,6 +186,6 @@ compute_identifier(struct ethernet_header* ethernet_header)
 }
 
 void print_mac_addr(uint8 mac_addr[MAC_ADDR_SIZE]) {
-  pr_debug("MAC Address: %x:%x:%x:%x:%x:%x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3],
+  pr_debug("%x:%x:%x:%x:%x:%x\n", mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3],
     mac_addr[4], mac_addr[5]);
 }

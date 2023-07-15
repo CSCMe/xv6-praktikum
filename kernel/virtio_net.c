@@ -266,13 +266,8 @@ virtio_net_intr(){
     if (reason & 0x1) {
         *R(VIRTIO_MMIO_INTERRUPT_ACK) = 0x1;
 
-        int index = net_card.receive.device->idx;
-        pr_debug("%d\n", index);
-        pr_debug("%p\n", net_card.receive.device->ring[0]);
-
         struct virtio_net_hdr* ptr;
         ptr = (struct virtio_net_hdr*) net_card.receive.desc->addr;
-        pr_emerg("buf addr:%p, bufs: %d, hdr_size: %d\n", ptr, ptr->num_buffers, ptr->hdr_len);
 
         struct ethernet_header* ethernet_header = (struct ethernet_header*)((uint8*) ptr + sizeof(struct virtio_net_hdr));
 
