@@ -34,7 +34,7 @@ typedef struct __connection_identifier {
     union __identification {
         uint64 value;
         struct arp {
-          ip_address target_ip;
+          uint8 target_ip[IP_ADDR_SIZE];
         } arp;
         struct tcp {
             uint8  dst_ip_addr[IP_ADDR_SIZE];

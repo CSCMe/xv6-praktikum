@@ -35,7 +35,7 @@ extern "C" {
 /**
  * Fields inside an arp packet
 */
-struct arp_packet {
+struct __attribute__((__packed__)) arp_packet {
   /**
      * hardware type
      * Either Ethernet (ARP_HW_TYPE_ETHERNET)
@@ -60,16 +60,16 @@ struct arp_packet {
   // Source MAC
   uint8 mac_src[MAC_ADDR_SIZE];
   // Source IP
-  ip_address ip_src;
+  uint8 ip_src[IP_ADDR_SIZE];
   // Dest MAC
   uint8 mac_dest[MAC_ADDR_SIZE];
   // DEST IP
-  ip_address ip_dest;
+  uint8 ip_dest[IP_ADDR_SIZE];
 };
 
 void arp_init();
 void test_send_arp();
-void get_mac_for_ip(uint8 mac_addr[], ip_address ip_addr);
+void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]);
 
 #ifdef __cplusplus
 }

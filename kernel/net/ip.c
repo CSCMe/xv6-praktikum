@@ -1,27 +1,27 @@
 #include "kernel/net/ip.h"
 #include "kernel/net/arp.h"
 
-static ip_address our_ip_address;
+static uint8 our_ip_address[IP_ADDR_SIZE];
 
-void print_ip(ip_address ip) {
-  pr_debug("IP: %d.%d.%d.%d\n", ip.octets[0], ip.octets[1], ip.octets[2], ip.octets[3]);
+void print_ip(uint8 octets[]) {
+  pr_debug("IP: %d.%d.%d.%d\n", octets[0], octets[1], octets[2], octets[3]);
 }
 
 void
-copy_ip_addr(ip_address *copy_to)
+copy_ip_addr(uint8* copy_to)
 {
-  memmove(copy_to->octets, our_ip_address.octets, IP_ADDR_SIZE);
+  memmove(copy_to, our_ip_address, IP_ADDR_SIZE);
 }
 
 void
 ip_init()
 {
-  ip_address starting_ip = {.octets={10,0,2,15}};
-  memmove(our_ip_address.octets, starting_ip.octets, sizeof(ip_address));
+  uint8 starting_ip[] = {10,0,2,15};
+  memmove(our_ip_address, starting_ip, IP_ADDR_SIZE);
 }
 
 void
-send_ipv4_packet(ip_address destination, uint8 ip_protocol, void* data, uint16 data_length)
+send_ipv4_packet(uint8 destination[], uint8 ip_protocol, void* data, uint16 data_length)
 {
   if (data_length > PGSIZE - sizeof(struct ipv4_header)) {
     pr_info("Send IP: Can't fit data into page. Aborting\n");
@@ -65,10 +65,10 @@ send_ipv4_packet(ip_address destination, uint8 ip_protocol, void* data, uint16 d
   header->header_checksum = 0;
 
   // Copy own IP-Address
-  copy_ip_addr(&header->src);
+  copy_ip_addr((uint8*)&header->src);
 
   // Copy destination IP-Address
-  memmove(header->dst.octets, destination.octets, sizeof(ip_address));
+  memmove(header->dst, destination, IP_ADDR_SIZE);
 
   // Copy data
   memmove(header->data, data, data_length);
@@ -86,6 +86,6 @@ void
 test_send_ip()
 {
   uint8 data[] = {1,2,3,4,5,6,7,1,2,3,4,5,6,7,1,2,3,4,5,6,7};
-  ip_address dest = {.octets={10,0,2,2}};
+  uint8 dest[] = {10,0,2,2};
   send_ipv4_packet(dest, IP_PROT_TESTING, data, sizeof(data));
 }

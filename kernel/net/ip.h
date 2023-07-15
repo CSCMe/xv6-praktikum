@@ -29,7 +29,7 @@ extern "C" {
 #define IP_PROT_UDP     0x11
 #define IP_PROT_TESTING 0xFD
 
-void print_ip(ip_address ip);
+void print_ip(uint8 ip[]);
 
 
 #define IPv4_TTL_DEFAULT 64
@@ -96,9 +96,9 @@ struct ipv4_header {
     // Header checksum. 0 for sake of calculation. CONVERT TO BIG ENDIAN (?)
     uint16 header_checksum;
     // Source IP-Addr
-    ip_address src;
+    uint8 src[IP_ADDR_SIZE];
     // Dest IP-Addr
-    ip_address dst;
+    uint8 dst[IP_ADDR_SIZE];
     // Contained data
     uint8 data[];
 };
@@ -106,8 +106,8 @@ struct ipv4_header {
 
 void test_send_ip();
 void ip_init();
-void send_ipv4_packet(ip_address destination, uint8 ip_protocol, void* data, uint16 data_length);
-void copy_ip_addr(ip_address *copy_to);
+void send_ipv4_packet(uint8 destination[], uint8 ip_protocol, void* data, uint16 data_length);
+void copy_ip_addr(uint8 copy_to[]);
 
 #ifdef __cplusplus
 }

@@ -6,7 +6,7 @@ void arp_init() {
     initlock(&arp_lock, "ARP lock");
 }
 
-void get_mac_for_ip(uint8 mac_addr[], ip_address ip_addr) {
+void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
   print_ip(ip_addr);
   struct arp_packet arp;
   arp.hw_type   = ARP_HW_TYPE_ETHERNET;
@@ -16,19 +16,19 @@ void get_mac_for_ip(uint8 mac_addr[], ip_address ip_addr) {
   arp.opcode    = ARP_OPCODE_REQ;
 
   copy_card_mac(arp.mac_src);
-  copy_ip_addr(&arp.ip_src);
+  copy_ip_addr(arp.ip_src);
 
   // For an ARP request, the destination mac is set to all 0xFF
   uint8 dest[MAC_ADDR_SIZE] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-  memmove((void *)&arp.mac_dest, dest, MAC_ADDR_SIZE);
-  arp.ip_dest.value = ip_addr.value;
+  memmove(arp.mac_dest, dest, MAC_ADDR_SIZE);
+  memmove(arp.ip_dest, ip_addr, IP_ADDR_SIZE);
 
   // Compute an identifier, which is used to match the response ethernet packet back
   // to our request.
   // In the case of ARP, the identifier is simply the target IP address
   connection_identifier token;
   token.protocol                           = CON_ARP;
-  token.identification.arp.target_ip.value = ip_addr.value;
+  memmove(token.identification.arp.target_ip, ip_addr, IP_ADDR_SIZE);
 
   // Acquire a lock so we don't get a response before we are waiting for it
   acquire(&arp_lock);
