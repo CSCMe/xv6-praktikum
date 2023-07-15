@@ -253,7 +253,6 @@ virtio_net_init(void)
   // Exposes receive buffer to card
   net_card.receive.driver->idx++;
 
-  net_init();
 }
 
 

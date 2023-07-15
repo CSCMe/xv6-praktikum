@@ -8,7 +8,7 @@ void print_ip(uint8 octets[]) {
 }
 
 void
-copy_ip_addr(uint8* copy_to)
+copy_ip_addr(uint8 copy_to[IP_ADDR_SIZE])
 {
   memmove(copy_to, our_ip_address, IP_ADDR_SIZE);
 }
@@ -21,7 +21,7 @@ ip_init()
 }
 
 void
-send_ipv4_packet(uint8 destination[], uint8 ip_protocol, void* data, uint16 data_length)
+send_ipv4_packet(uint8 destination[IP_ADDR_SIZE], uint8 ip_protocol, void* data, uint16 data_length)
 {
   if (data_length > PGSIZE - sizeof(struct ipv4_header)) {
     pr_info("Send IP: Can't fit data into page. Aborting\n");
@@ -75,8 +75,8 @@ send_ipv4_packet(uint8 destination[], uint8 ip_protocol, void* data, uint16 data
 
   // Default mac is broadcast
   uint8 mac_dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-  //get_mac_for_ip(mac_dest, &header->dst); // TODO: implement
-  send_ethernet_packet(mac_dest, ETHERNET_TYPE_IPv4, buf, (sizeof(struct ipv4_header)) + data_length);
+  get_mac_for_ip(mac_dest, header->dst); // TODO: implement
+  send_ethernet_packet(mac_dest, ETHERNET_TYPE_IPv4, header, (sizeof(struct ipv4_header)) + data_length);
   // Don't forget to free temp buffer at the end
   kfree(buf);
 }

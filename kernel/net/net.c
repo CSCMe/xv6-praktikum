@@ -1,18 +1,19 @@
 #include "kernel/net/arp.h"
 #include "kernel/net/ip.h"
 #include "kernel/net/net.h"
+#include "kernel/net/transport.h"
 
 static connection_entry connections[MAX_TRACKED_CONNECTIONS] = {0};
 static struct spinlock connections_lock                      = {0};
 
-void net_init() {
+void
+net_init()
+{
   initlock(&connections_lock, "Connection Tracker Lock");
   arp_init();
   ip_init();
+  udp_init();
 
-
-  test_send_arp();
-  test_send_ip();
 }
 
 /**
