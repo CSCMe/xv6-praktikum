@@ -136,7 +136,7 @@ copy_data_to_entry(connection_entry* entry, struct ethernet_header* ethernet_hea
         default:
             return;
     }
-    uint8* data = (uint8*) ethernet_header;
+    uint8* data = (uint8*) ethernet_header + offset;
 
     memmove(entry->buf, data, length);
 }
