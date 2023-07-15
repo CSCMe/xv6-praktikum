@@ -29,6 +29,7 @@ OBJS = \
   $K/pipe.o \
   $K/exec.o \
   $K/sysfile.o \
+  $K/sysnet.o \
   $K/kernelvec.o \
   $K/plic.o \
   $K/virtio_disk.o  \
@@ -147,6 +148,7 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 .PRECIOUS: %.o
 
 UPROGS=\
+	$U/_testnet\
 	$U/_cat\
 	$U/_echo\
 	$U/_forktest\

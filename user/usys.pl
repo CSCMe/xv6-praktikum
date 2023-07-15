@@ -41,3 +41,4 @@ entry("printPT");
 entry("futex_wait");
 entry("futex_wake");
 entry("futex_init");
+entry("net_test");

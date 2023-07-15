@@ -37,6 +37,7 @@ extern "C" {
 #define SYS_futex_init 24
 #define SYS_futex_wait 25
 #define SYS_futex_wake 26
+#define SYS_net_test 27
 #define SYS_hello_kernel 50
 #define SYS_printPT 51
 #define SYS_cxx    100

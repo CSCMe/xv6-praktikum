@@ -42,6 +42,7 @@ int printPT(void);
 int futex_init(uint64* futex);
 int futex_wait(uint64* futex, uint64 val);
 int futex_wake(uint64* futex, int num_wake);
+int net_test(void);
 
 // ulib.c
 int stat(const char*, struct stat*);
