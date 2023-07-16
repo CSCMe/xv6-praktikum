@@ -6,15 +6,17 @@
 
 static connection_entry connections[MAX_TRACKED_CONNECTIONS] = {0};
 static struct spinlock connections_lock                      = {0};
-
+static int init_done = 0;
 void
 net_init()
 {
-  initlock(&connections_lock, "Connection Tracker Lock");
-  arp_init();
-  ip_init();
-  udp_init();
-
+  if (init_done == 0) {
+    initlock(&connections_lock, "Connection Tracker Lock");
+    arp_init();
+    ip_init();
+    udp_init();
+    init_done++;
+  }
 }
 
 /**
