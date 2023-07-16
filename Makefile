@@ -44,6 +44,7 @@ OBJS = \
   $N/ip.o \
   $N/arp.o \
   $N/udp.o \
+  $N/dhcp.o \
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -206,7 +207,7 @@ endif
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
-QEMUOPTS += -netdev user,id=net0,hostfwd=tcp::5555-:22#SLIRP, might need to update later (https://wiki.qemu.org/Documentation/Networking#User_Networking_(SLIRP))
+QEMUOPTS += -netdev user,id=net0,hostfwd=tcp::5555-:22,hostname="boiii"#SLIRP, might need to update later (https://wiki.qemu.org/Documentation/Networking#User_Networking_(SLIRP))
 QEMUOPTS += -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1,mac=12:12:12:55:55:57
 QEMUOPTS += -object filter-dump,id=f1,netdev=net0,file=dump.dat
 QEMUOPTS.drive = -drive file=fs.img,if=none,format=raw,id=x0
