@@ -36,4 +36,5 @@ void send_udp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint1
     memmove(header->data, data, data_length);
 
     send_ipv4_packet(dest_address, IP_PROT_UDP, header, data_length + sizeof(struct udp_header));
+    kfree(buf);
 }

@@ -92,4 +92,8 @@ void dhcp_get_ip_address(uint8 ip_address[IP_ADDR_SIZE])
 
   // Copy ip address to return location
   memmove(ip_address, response_packet->your_ip_addr, IP_ADDR_SIZE);
+  kfree(buf);
+  kfree(response_buf);
+  
+  pr_debug("DHCP done\n");
 }
