@@ -91,7 +91,7 @@ struct dhcp_packet {
     uint8 options[];
 };
 
-void dhcp_get_ip_address();
+void dhcp_get_ip_address(uint8 target_ip_addr[IP_ADDR_SIZE]);
 
 #ifdef __cplusplus
 }

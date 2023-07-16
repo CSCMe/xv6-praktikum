@@ -78,15 +78,12 @@ void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
   token.protocol              = CON_ARP;
   memmove(token.identification.arp.target_ip, ip_addr, IP_ADDR_SIZE);
 
-  // Acquire a lock so we don't get a response before we are waiting for it
-  acquire(&arp_lock);
-
   struct arp_packet arp_response;
   add_connection_entry(token, (void *)&arp_response);
 
   send_ethernet_packet(arp.mac_dest, ETHERNET_TYPE_ARP, (void *)&arp, sizeof(struct arp_packet));
 
-  wait_for_response(token, &arp_lock);
+  wait_for_response(token);
 
   memmove(mac_addr, arp_response.mac_src, MAC_ADDR_SIZE);
 

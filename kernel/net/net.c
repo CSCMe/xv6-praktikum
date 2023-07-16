@@ -39,11 +39,9 @@ void add_connection_entry(connection_identifier id, void *buf) {
 /**
  * Wait for a response. MUST have already inserted an entry with add_connection_entry
  * Checks if response has already arrived, else sleeps
- * Releases a held lock upon entering sleep mode to ensure no loss of response
 */
-void wait_for_response(connection_identifier id, struct spinlock *lock) {
+void wait_for_response(connection_identifier id) {
   acquire(&connections_lock);
-  release(lock);
   connection_entry* entry = NULL;
   for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
     if (connections[i].signal != 0 
