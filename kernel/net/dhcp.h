@@ -50,12 +50,15 @@ extern "C" {
 #define DHCP_OPTIONS_MESSAGE_TYPE_DHCPRELEASE    7
 #define DHCP_OPTIONS_MESSAGE_TYPE_DHCPINFORM     8
 
+#define DHCP_OPTIONS_SERVER_NAME_NUM 54
+#define DHCP_OPTIONS_SERVER_NAME_LEN DHCP_SERVER_NAME_SIZE
+
 #define DHCP_OPTIONS_END 255
 
 struct dhcp_packet {
     /**
      * opcode. 
-     * Possible values: DHCP_OPTIONS_MESSAGE_TYPE_*
+     * Possible values: DHCP_OPCODE_REQUEST, DHCP_OPCODE_REPLY,
     */
     uint8 opcode;
     // Underlying hardware type. For now only DHCP_HTYPE_ETHERNET allowed
