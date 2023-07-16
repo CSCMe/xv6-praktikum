@@ -82,7 +82,6 @@ struct __attribute__((__packed__)) arp_packet {
 };
 
 void arp_init();
-void test_send_arp();
 void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]);
 
 #ifdef __cplusplus

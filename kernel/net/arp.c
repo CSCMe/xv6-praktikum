@@ -98,19 +98,3 @@ log_result:
   if (cached) pr_debug(" (cached)");
   pr_debug("\n");
 }
-
-void test_send_arp() {
-  struct arp_packet actual_arp = {0};
-  struct arp_packet *arp       = &actual_arp;
-
-  copy_card_mac(arp->mac_src);
-  uint8 ipme[8] = {10, 0, 2, 15};
-  memmove((void *)&arp->ip_src, ipme, 4);
-  uint8 dest[6] = MAC_ADDR_BROADCAST;
-  memmove((void *)&arp->mac_dest, dest, 6);
-  uint8 ipdest[8] = {10, 0, 2, 2};
-  memmove((void *)&arp->ip_dest, ipdest, 4);
-
-
-  send_ethernet_packet(dest, ETHERNET_TYPE_ARP, (void *)arp, sizeof(struct arp_packet));
-}
