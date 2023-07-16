@@ -6,6 +6,7 @@ void dhcp_get_ip_address()
     void* response_buf = kalloc_zero();
     if (!buf || !response_buf)
         panic("DHCP kalloc fail");
+        
     struct dhcp_packet* packet = (struct dhcp_packet*) buf;
     packet->opcode = DHCP_OPCODE_REQUEST;
     packet->htype  = DHCP_HTYPE_ETHERNET;
@@ -30,11 +31,13 @@ void dhcp_get_ip_address()
     options_len++;
     uint8 dest_ip[IP_ADDR_SIZE] = IP_ADDR_BROADCAST;
 
+    connection_identifier id = {.protocol=CON_DHCP, .identification={.dhcp={.transaction_id=packet->transaction_id}}};
+
     struct spinlock dhcp_lock = {0};
     initlock(&dhcp_lock, "DHCP Lock");
     acquire(&dhcp_lock);
+
     send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
-    connection_identifier id = {.protocol=CON_DHCP, .identification={.dhcp={.transaction_id=packet->transaction_id}}};
     wait_for_response(id, response_buf, &dhcp_lock);
     pr_debug("Woah, response!");
 }

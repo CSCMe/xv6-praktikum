@@ -146,13 +146,16 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
     case IP_PROT_UDP:
       id.protocol = CON_UDP;
       struct udp_header* udp_header = (struct udp_header*) ((uint8*) ipv4_header + sizeof(struct ipv4_header));
+      memreverse((void *)&udp_header->dst, sizeof(udp_header->dst));
+
       if (udp_header->dst == DHCP_PORT_CLIENT) {
         id.protocol = CON_DHCP;
-        struct dhcp_packet* dhcp_packet = (struct dhcp_packet*) ((uint8*) udp_header + sizeof(struct udp_header));
+        struct dhcp_packet *dhcp_packet =
+          (struct dhcp_packet *)((uint8 *)udp_header + sizeof(struct udp_header));
         id.identification.dhcp.transaction_id = dhcp_packet->transaction_id;
-        break;
+      } else {
+        pr_notice("Not supported: Dropping UDP %x\n", udp_header->dst);
       }
-      pr_notice("Not supported: Dropping UDP\n");
       break;
     default:
       id.protocol = CON_UNKNOWN;
