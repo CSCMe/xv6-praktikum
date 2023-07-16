@@ -14,6 +14,6 @@ uint64 sys_net_test(void) {
   uint8 resolved_mac_addr[MAC_ADDR_SIZE] = {};
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
-
+  pr_info("testnet done\n");
   return 0;
 }

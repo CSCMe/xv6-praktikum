@@ -71,7 +71,8 @@ void copy_data_to_entry(connection_entry* entry, struct ethernet_header* etherne
 void net_init();
 int handle_incoming_connection(struct ethernet_header* ethernet_header);
 int notify_of_response(struct ethernet_header* ethernet_header);
-void wait_for_response(connection_identifier id, void* buf, struct spinlock* lock);
+void add_connection_entry(connection_identifier id, void *buf);
+void wait_for_response(connection_identifier id, struct spinlock* lock);
 
 void print_mac_addr(uint8 mac_addr[MAC_ADDR_SIZE]);
 

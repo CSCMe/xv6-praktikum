@@ -42,12 +42,14 @@ void dhcp_get_ip_address(uint8 ip_address[IP_ADDR_SIZE])
   initlock(&dhcp_lock, "DHCP Lock");
   acquire(&dhcp_lock);
 
+  add_connection_entry(id, response_buf);
+
   send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
 
   struct dhcp_packet *response_packet;
 
   // Wait for response
-  wait_for_response(id, response_buf, &dhcp_lock);
+  wait_for_response(id, &dhcp_lock);
 
   // If everything went as expected, the next packet should be a DHCPOFFER packet.
   // We might receive more than one offer but since we don't care about specifics, we just choose
@@ -83,9 +85,12 @@ void dhcp_get_ip_address(uint8 ip_address[IP_ADDR_SIZE])
   id.identification.dhcp.message_type  = DHCP_OPTIONS_MESSAGE_TYPE_DHCPACK;
 
   acquire(&dhcp_lock);
+
+  add_connection_entry(id, response_buf);
+
   send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
   // Await DHCPACK
-  wait_for_response(id, response_buf, &dhcp_lock);
+  wait_for_response(id, &dhcp_lock);
 
   // We got a confirmed DHCPACK for our transaction id
   response_packet = (struct dhcp_packet *)(response_buf);

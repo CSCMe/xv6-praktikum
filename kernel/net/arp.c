@@ -80,10 +80,13 @@ void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
 
   // Acquire a lock so we don't get a response before we are waiting for it
   acquire(&arp_lock);
-  send_ethernet_packet(arp.mac_dest, ETHERNET_TYPE_ARP, (void *)&arp, sizeof(struct arp_packet));
 
   struct arp_packet arp_response;
-  wait_for_response(token, (void *)&arp_response, &arp_lock);
+  add_connection_entry(token, (void *)&arp_response);
+
+  send_ethernet_packet(arp.mac_dest, ETHERNET_TYPE_ARP, (void *)&arp, sizeof(struct arp_packet));
+
+  wait_for_response(token, &arp_lock);
 
   memmove(mac_addr, arp_response.mac_src, MAC_ADDR_SIZE);
 

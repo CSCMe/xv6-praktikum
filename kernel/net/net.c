@@ -20,30 +20,54 @@ net_init()
 }
 
 /**
- * Wait for a response.
- * Releases a held lock upon entering sleep mode to ensure no loss of response
+ * Insert an entry into the connections tracker
 */
-void wait_for_response(connection_identifier id, void *buf, struct spinlock *lock) {
+void add_connection_entry(connection_identifier id, void *buf) {
   acquire(&connections_lock);
-  release(lock);
   for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
     if (connections[i].signal == 0) {
       connections[i].signal     = 1;
       connections[i].identifier = id;
       connections[i].buf        = buf;
-      // Sleep dinge. Wakeup on response
-      // Maybe replace with spin if reply not guaranteed
-      sleep(&connections[i].signal, &connections_lock);
-
-      // Reset structure
-      connections[i].signal                          = 0;
-      connections[i].identifier.identification.value = 0;
-      connections[i].buf                             = NULL;
       release(&connections_lock);
       return;
     }
   }
   panic("No free slot for waiting for response\n");
+}
+
+/**
+ * Wait for a response. MUST have already inserted an entry with add_connection_entry
+ * Checks if response has already arrived, else sleeps
+ * Releases a held lock upon entering sleep mode to ensure no loss of response
+*/
+void wait_for_response(connection_identifier id, struct spinlock *lock) {
+  acquire(&connections_lock);
+  release(lock);
+  connection_entry* entry = NULL;
+  for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
+    if (connections[i].signal != 0 
+        && connections[i].identifier.protocol == id.protocol 
+        && connections[i].identifier.identification.value == id.identification.value) {
+      entry = &connections[i];
+      break;
+    }
+  }
+
+  if (entry == NULL)
+    panic("Waiting on non-existent table entry\n");
+  
+  // Response hasn't arrived yet? Sleep on it
+  if (entry->signal == 1) {
+    sleep(&entry->signal, &connections_lock);
+  }
+
+  // Reset entry
+  entry->signal = 0;
+  entry->buf    = NULL;
+  entry->identifier.identification.value = 0;
+  entry->identifier.protocol             = 0;
+  release(&connections_lock);
 }
 
 int handle_incoming_connection(struct ethernet_header *ethernet_header) {
