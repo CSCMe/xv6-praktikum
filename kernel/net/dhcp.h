@@ -55,7 +55,7 @@ extern "C" {
 struct dhcp_packet {
     /**
      * opcode. 
-     * Possible values: DHCP_OPCODE_REQUEST, DHCP_OPCODE_REPLY
+     * Possible values: DHCP_OPTIONS_MESSAGE_TYPE_*
     */
     uint8 opcode;
     // Underlying hardware type. For now only DHCP_HTYPE_ETHERNET allowed

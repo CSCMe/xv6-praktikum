@@ -3,10 +3,10 @@
 void dhcp_get_ip_address()
 {
     void* buf = kalloc_zero();
-    void* response_buf = kalloc_zero();
+    void* response_buf = kalloc();
     if (!buf || !response_buf)
         panic("DHCP kalloc fail");
-        
+
     struct dhcp_packet* packet = (struct dhcp_packet*) buf;
     packet->opcode = DHCP_OPCODE_REQUEST;
     packet->htype  = DHCP_HTYPE_ETHERNET;
@@ -16,9 +16,11 @@ void dhcp_get_ip_address()
     memreverse(&packet->transaction_id, sizeof(packet->transaction_id));
     packet->seconds = 0; // No need to reverse it's 0 anyways
     packet->flags = DHCP_FLAGS_BROADCAST;
+
     // Leave all IP addresses at 0
     copy_card_mac(packet->client_hardware_addr);
     int options_len = 0;
+
     // Set magic value
     uint32 dhcp_magic = DHCP_OPTIONS_MAGIC_COOKIE_VALUE;
     memmove(packet->options + options_len, &dhcp_magic, DHCP_OPTIONS_MAGIC_COOKIE_LEN);
@@ -39,5 +41,10 @@ void dhcp_get_ip_address()
 
     send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
     wait_for_response(id, response_buf, &dhcp_lock);
-    pr_debug("Woah, response!");
+
+    // If everything went as expected, the next packet should be a DHCPOFFER packet.
+    // We might receive more than one offer but since we don't care about specifics, we just choose
+    // the first one and ignore the rest.
+    struct dhcp_packet *response_packet = (struct dhcp_packet*)(response_buf);
+    pr_debug("Woah, response! with opcode %x htype %x", response_packet->opcode, response_packet->htype);
 }

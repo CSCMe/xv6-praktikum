@@ -105,6 +105,12 @@ void copy_data_to_entry(connection_entry *entry, struct ethernet_header *etherne
   switch (entry->identifier.protocol) {
   case CON_ARP: length = sizeof(struct arp_packet); break;
   case CON_DHCP:
+    // DHCP is transmitted on top of IP + UDP
+    offset += sizeof(struct ipv4_header) + sizeof(struct udp_header);
+    // FIXME: dhcp packet contains options, making it variably sized...
+    // But we likely don't care about those anyways.
+    length = sizeof(struct dhcp_packet);
+    break;
   case CON_ICMP:
   case CON_TCP:
   case CON_UDP:
@@ -147,7 +153,6 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
       id.protocol = CON_UDP;
       struct udp_header* udp_header = (struct udp_header*) ((uint8*) ipv4_header + sizeof(struct ipv4_header));
       memreverse((void *)&udp_header->dst, sizeof(udp_header->dst));
-
       if (udp_header->dst == DHCP_PORT_CLIENT) {
         id.protocol = CON_DHCP;
         struct dhcp_packet *dhcp_packet =
