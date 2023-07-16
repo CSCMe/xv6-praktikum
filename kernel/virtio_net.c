@@ -9,9 +9,7 @@
 #include "memlayout.h"
 #include "buf.h"
 #include "virtio.h"
-#include "net/net.h"
-#include "net/ip.h" // TODO: REMOVE
-#include "net/arp.h"
+#include "kernel/net/net.h"
 
 // the address of virtio mmio register r.
 #define R(r) ((volatile uint32 *)(VIRTIO1 + (r)))
@@ -60,6 +58,12 @@ void debug_available_features(uint64 features) {
 }
 
 void
+virtio_queue_increment(virt_queue* queue, uint32* var)
+{
+  *var = (*var + 1) % queue->size;
+}
+
+void
 send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* data, uint16 data_length)
 {
 
@@ -71,8 +75,11 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   // Now interact with card
   acquire(&net_card.net_lock);
 
-  // Get Send Buffer
-  void* buf = (void*) net_card.transmit.desc->addr;
+  // Get Send Buffer and increment first_free_transmit
+  uint8 current_ringbuffer_pos = net_card.transmit.next_used_idx;
+  virtio_queue_increment(&net_card.transmit, &net_card.transmit.next_used_idx);
+  void* buf = (void*) net_card.transmit.desc[current_ringbuffer_pos].addr;
+
   struct ethernet_header* eth_header;
   struct ethernet_tailer* eth_tailer;
 
@@ -118,13 +125,8 @@ send_ethernet_packet(uint8 dest_mac[MAC_ADDR_SIZE], enum EtherType type, void* d
   // Test: Write 5 in byte 0 of checksum. TODO: Add actual checksum calc
   eth_tailer->crc[0] = 5;
 
-  net_card.transmit.desc->flags = 0;
-
-  // Suppress buffer consumption interrupts *FOR NOR* TODO: REMOVE and handle these interrupts too
-  net_card.transmit.driver->flags = VIRTQ_AVAIL_F_NO_INTERRUPT;
-
   // Calculate size of buffer
-  net_card.transmit.desc->len = ((uint64)eth_tailer + sizeof(struct ethernet_tailer) - (uint64)buf);
+  net_card.transmit.desc[current_ringbuffer_pos].len = ((uint64)eth_tailer + sizeof(struct ethernet_tailer) - (uint64)buf);
 
   __sync_synchronize();
   net_card.transmit.driver->idx++;
@@ -195,23 +197,27 @@ virtio_net_init(void)
         if(!queues[i]->desc || !queues[i]->driver || !queues[i]->device)
             panic("virtio net kalloc");
 
+        for (int k = 0; k < NUM; k++) {
+          // kalloc for buffers
+          queues[i]->desc[k].addr = (uint64) kalloc_zero();
+          if (!queues[i]->desc[k].addr)
+              panic("virtio net buffer kalloc");
+          
+          queues[i]->desc[k].len = PGSIZE;
 
-        // kalloc for buffers
-        queues[i]->desc->addr = (uint64) kalloc_zero();
-        if (!queues[i]->desc->addr)
-            panic("virtio net buffer kalloc");
-        
-        queues[i]->desc->len = PGSIZE;
-
-        // Set write property for receive queues, exclude control queue
-        if (i < (NUM_QUEUES - 1) && (i % 2 == 0)) {
-            queues[i]->desc->flags = VRING_DESC_F_WRITE;
-        } else {
-            queues[i]->desc->flags = 0;
+          // Set write property for receive queues, exclude control queue
+          if (i < (NUM_QUEUES - 1) && (i % 2 == 0)) {
+              queues[i]->desc[k].flags = VRING_DESC_F_WRITE;
+          } else {
+              queues[i]->desc[k].flags = 0;
+          }
+          // Ring describes descriptor index for this ring index
+          queues[i]->driver->ring[k] = (k) % NUM;
         }
 
         *R(VIRTIO_MMIO_QUEUE_SEL) = i;
-        *R(VIRTIO_MMIO_QUEUE_NUM) = 1; // Stolen from virtio_disk
+        *R(VIRTIO_MMIO_QUEUE_NUM) = NUM; // Stolen from virtio_disk
+        queues[i]->size = NUM;
 
         // write physical addresses.
         *R(VIRTIO_MMIO_QUEUE_DESC_LOW) = (uint64)queues[i]->desc;
@@ -249,10 +255,9 @@ virtio_net_init(void)
     // Config reading done
     pr_debug("status:%p\n", config.status);
 
-  // Temporarily in this location
-  // Exposes receive buffer to card
-  net_card.receive.driver->idx++;
-
+    // Expose all receive buffers
+    for (int i = 0; i < NUM; i++)
+      net_card.receive.driver->idx++;
 }
 
 
@@ -264,22 +269,40 @@ virtio_net_intr(){
     // Used buffer notification
     if (reason & 0x1) {
         *R(VIRTIO_MMIO_INTERRUPT_ACK) = 0x1;
-
-        struct virtio_net_hdr* ptr;
-        ptr = (struct virtio_net_hdr*) net_card.receive.desc->addr;
-
-        struct ethernet_header* ethernet_header = (struct ethernet_header*)((uint8*) ptr + sizeof(struct virtio_net_hdr));
-
-        // Notify any waiting processes.
-        if (notify_of_response(ethernet_header) != 0) {
-          // Unexpected packet. Maybe establishing connection?
-          if(handle_incoming_connection(ethernet_header) != 0) {
-            pr_notice("Dropping unexpected packet.\n");
-          }
+        while (net_card.transmit.device->idx % NUM != net_card.transmit.first_used_idx) {
+          // Just throw our transmit bufs back into the ring.
+          // No special processing (for now?)
+          
+          virtio_queue_increment(&net_card.transmit, &net_card.transmit.first_used_idx);
+          //pr_info("Recycled transmit\n");
         }
+        // Transmit queue return interrupts
+        /**
+         * TODO
+        */
 
-        // Hand used buffer back to card
-        net_card.receive.driver->idx++;
+       while (net_card.receive.device->idx % NUM != net_card.receive.first_used_idx) {
+        // Receive interrupts
+          struct virtio_net_hdr* ptr;
+
+          uint8 desc_index = net_card.receive.device->ring[net_card.receive.first_used_idx].id;
+          // Len is also written to descriptor ring but we'll just ignore it
+          ptr = (struct virtio_net_hdr*) net_card.receive.desc[desc_index].addr;
+          struct ethernet_header* ethernet_header = (struct ethernet_header*)((uint8*) ptr + sizeof(struct virtio_net_hdr));
+
+          // Notify any waiting processes.
+          if (notify_of_response(ethernet_header) != 0) {
+            // Unexpected packet. Maybe establishing connection?
+            if(handle_incoming_connection(ethernet_header) != 0) {
+              pr_notice("Dropping unexpected packet.\n");
+            }
+          }
+
+          // Hand used buffer back to card
+          net_card.receive.driver->idx++;
+          
+          virtio_queue_increment(&net_card.receive, &net_card.receive.first_used_idx);
+       }
     } 
     // Both can happen in the same interrupt
     if (reason & 0x2) { // Config change

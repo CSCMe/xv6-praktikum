@@ -10,8 +10,7 @@ extern "C" {
 #endif
 
 #include "kernel/types.h"
-#include "kernel/net/net.h"
-
+#include "kernel/net/netdefs.h"
 #define VIRTIO_NET_USER_MODE
 
 //
@@ -150,9 +149,12 @@ typedef struct virtq_used virtq_device;
  * These have descriptor, available ring (in driver), used ring (in device) areas
 */
 typedef struct __virt_queue {
+  uint32 size;
   virtq_desc *desc;
   virtq_driver *driver;
   virtq_device *device;
+  uint32 first_used_idx;
+  uint32 next_used_idx;
 } virt_queue;
 
 // these are specific to virtio block devices, e.g. disks,

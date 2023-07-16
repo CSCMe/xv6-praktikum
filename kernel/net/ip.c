@@ -97,7 +97,7 @@ send_ipv4_packet(uint8 destination[IP_ADDR_SIZE], uint8 ip_protocol, void* data,
     pr_emerg("(That being said, let's try sending it anyways ¯\\_(ツ)_/¯)\n");
   }
 
-  get_mac_for_ip(mac_dest, header->dst); // TODO: implement
+  get_mac_for_ip(mac_dest, header->dst);
   send_ethernet_packet(mac_dest, ETHERNET_TYPE_IPv4, header, (sizeof(struct ipv4_header)) + data_length);
   // Don't forget to free temp buffer at the end
   kfree(buf);
