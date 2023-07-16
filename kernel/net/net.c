@@ -2,6 +2,7 @@
 #include "kernel/net/ip.h"
 #include "kernel/net/net.h"
 #include "kernel/net/transport.h"
+#include "kernel/net/dhcp.h"
 
 static connection_entry connections[MAX_TRACKED_CONNECTIONS] = {0};
 static struct spinlock connections_lock                      = {0};
@@ -144,6 +145,13 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
       break;
     case IP_PROT_UDP:
       id.protocol = CON_UDP;
+      struct udp_header* udp_header = (struct udp_header*) ((uint8*) ipv4_header + sizeof(struct ipv4_header));
+      if (udp_header->dst == DHCP_PORT_CLIENT) {
+        id.protocol = CON_DHCP;
+        struct dhcp_packet* dhcp_packet = (struct dhcp_packet*) ((uint8*) udp_header + sizeof(struct udp_header));
+        id.identification.dhcp.transaction_id = dhcp_packet->transaction_id;
+        break;
+      }
       pr_notice("Not supported: Dropping UDP\n");
       break;
     default:

@@ -29,8 +29,6 @@ extern "C" {
 #define IP_PROT_UDP     0x11
 #define IP_PROT_TESTING 0xFD
 
-void print_ip(uint8 ip[]);
-
 
 #define IPv4_TTL_DEFAULT 64
 
@@ -103,7 +101,7 @@ struct ipv4_header {
     uint8 data[];
 };
 
-
+void print_ip(uint8 ip[]);
 void test_send_ip();
 void ip_init();
 void send_ipv4_packet(uint8 destination[IP_ADDR_SIZE], uint8 ip_protocol, void* data, uint16 data_length);

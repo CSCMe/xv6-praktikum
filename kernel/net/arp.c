@@ -13,6 +13,11 @@ void arp_init() {
   // Initialize the ARP table
   for (int i = 0; i < NUM_ARP_TABLE_ENTRIES; i++) { arp_table.entries[i].is_valid = 0; }
   arp_table.index = 0;
+
+  // Insert broadcast address
+  uint8 ip_broadcst[IP_ADDR_SIZE] = IP_ADDR_BROADCAST;
+  uint8 mac_broadcast[MAC_ADDR_SIZE] = MAC_ADDR_BROADCAST;
+  arp_table_insert(ip_broadcst, mac_broadcast);
 }
 
 uint8 arp_table_lookup(uint8 ip_addr[], uint8 write_mac_addr_to[]) {
@@ -61,8 +66,8 @@ void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
   copy_card_mac(arp.mac_src);
   copy_ip_addr(arp.ip_src);
 
-  // For an ARP request, the destination mac is set to all 0xFF
-  uint8 dest[MAC_ADDR_SIZE] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  // For an ARP request, the destination mac is set to broadcast
+  uint8 dest[MAC_ADDR_SIZE] = MAC_ADDR_BROADCAST;
   memmove(arp.mac_dest, dest, MAC_ADDR_SIZE);
   memmove(arp.ip_dest, ip_addr, IP_ADDR_SIZE);
 
@@ -101,7 +106,7 @@ void test_send_arp() {
   copy_card_mac(arp->mac_src);
   uint8 ipme[8] = {10, 0, 2, 15};
   memmove((void *)&arp->ip_src, ipme, 4);
-  uint8 dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  uint8 dest[6] = MAC_ADDR_BROADCAST;
   memmove((void *)&arp->mac_dest, dest, 6);
   uint8 ipdest[8] = {10, 0, 2, 2};
   memmove((void *)&arp->ip_dest, ipdest, 4);

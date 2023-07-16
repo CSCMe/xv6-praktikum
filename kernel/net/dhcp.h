@@ -12,19 +12,45 @@
 extern "C" {
 #endif
 
+#define DHCP_PORT_CLIENT 68
+#define DHCP_PORT_SERVER 67
+
 #define DHCP_HARDWARE_ADDR_SIZE 16
 #define DHCP_SERVER_NAME_SIZE 64
 #define DHCP_BOOT_FILENAME_SIZE 128
-#define DHCP_OPTIONS_SIZE 64
 
 // DHCP opcodes. Specifics are encoded in message type option
 #define DHCP_OPCODE_REQUEST 1
 #define DHCP_OPCODE_REPLY   2
 
 #define DHCP_HTYPE_ETHERNET 1
+#define DHCP_HLEN_ETHERNET MAC_ADDR_SIZE
 
-#define DHCP_FLAGS_BROADCAST 1 << 8
+// Flag for broadcast (endian preconverted)
+#define DHCP_FLAGS_BROADCAST 1 << 7
 
+/**
+ * Fields in DHCP options fields
+ * First field index, then value
+*/
+
+// Magic cookie for DHCP options. Endian preconverted
+#define DHCP_OPTIONS_MAGIC_COOKIE_VALUE          0x63538263
+#define DHCP_OPTIONS_MAGIC_COOKIE_LEN            4
+
+// Options for message type
+#define DHCP_OPTIONS_MESSAGE_TYPE_NUM            53  
+#define DHCP_OPTIONS_MESSAGE_TYPE_LEN            1    
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPDISCOVER   1
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPOFFER      2
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPREQUEST    3
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPDECLINE    4
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPACK        5
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPNACK       6
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPRELEASE    7
+#define DHCP_OPTIONS_MESSAGE_TYPE_DHCPINFORM     8
+
+#define DHCP_OPTIONS_END 255
 
 struct dhcp_packet {
     /**
@@ -53,14 +79,16 @@ struct dhcp_packet {
     // Just ignore. Used for forwarding
     uint8 gateway_ip_addr[IP_ADDR_SIZE];
     // hardware (ethernet) address used for identification and communication
-    uint8 client_hardware_addr[MAC_ADDR_SIZE];
+    uint8 client_hardware_addr[DHCP_HARDWARE_ADDR_SIZE];
     // Server appends name in DHCPOFFER or DHCPACK messages
     char server_name[DHCP_SERVER_NAME_SIZE];
     // Just ignore
     char boot_filename[DHCP_BOOT_FILENAME_SIZE];
-    // see http://www.tcpipguide.com/free/t_DHCPOptionsOptionFormatandOptionOverloading-2.htm
-    uint8 options[DHCP_OPTIONS_SIZE];
+    // Options of variable size
+    uint8 options[];
 };
+
+void dhcp_get_ip_address();
 
 #ifdef __cplusplus
 }

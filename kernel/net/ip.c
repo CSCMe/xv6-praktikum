@@ -1,22 +1,30 @@
 #include "kernel/net/ip.h"
 #include "kernel/net/arp.h"
+#include "kernel/net/dhcp.h"
 
 static uint8 our_ip_address[IP_ADDR_SIZE];
+
 
 void print_ip(uint8 octets[]) {
   pr_debug("%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
 }
 
+static int requested_ip_count = 0;
 void
 copy_ip_addr(uint8 copy_to[IP_ADDR_SIZE])
 {
+  // Only first request asks DHCP server
+  requested_ip_count++;
+  if (our_ip_address[0] == 0 && requested_ip_count <= 1) {
+    // dhcp_get_ip_address();
+  }
   memmove(copy_to, our_ip_address, IP_ADDR_SIZE);
 }
 
 void
 ip_init()
 {
-  uint8 starting_ip[] = {10,0,2,15};
+  uint8 starting_ip[] = {0, 0, 0, 0};
   memmove(our_ip_address, starting_ip, IP_ADDR_SIZE);
 }
 
@@ -74,7 +82,7 @@ send_ipv4_packet(uint8 destination[IP_ADDR_SIZE], uint8 ip_protocol, void* data,
   memmove(header->data, data, data_length);
 
   // Default mac is broadcast
-  uint8 mac_dest[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  uint8 mac_dest[6] = MAC_ADDR_BROADCAST;
   get_mac_for_ip(mac_dest, header->dst); // TODO: implement
   send_ethernet_packet(mac_dest, ETHERNET_TYPE_IPv4, header, (sizeof(struct ipv4_header)) + data_length);
   // Don't forget to free temp buffer at the end
