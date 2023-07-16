@@ -9,23 +9,22 @@ void print_ip(uint8 octets[]) {
   pr_debug("%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3]);
 }
 
-static int requested_ip_count = 0;
 void
 copy_ip_addr(uint8 copy_to[IP_ADDR_SIZE])
 {
-  // Only first request asks DHCP server
-  requested_ip_count++;
-  if (our_ip_address[0] == 0 && requested_ip_count <= 1) {
-    // dhcp_get_ip_address();
-  }
   memmove(copy_to, our_ip_address, IP_ADDR_SIZE);
 }
 
+/**
+ * Sets initial IP to 0
+ * Starts DHCP Request
+*/
 void
 ip_init()
 {
   uint8 starting_ip[] = {0, 0, 0, 0};
   memmove(our_ip_address, starting_ip, IP_ADDR_SIZE);
+  dhcp_get_ip_address(our_ip_address);
 }
 
 void

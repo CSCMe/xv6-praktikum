@@ -153,11 +153,17 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
       id.protocol = CON_UDP;
       struct udp_header* udp_header = (struct udp_header*) ((uint8*) ipv4_header + sizeof(struct ipv4_header));
       memreverse((void *)&udp_header->dst, sizeof(udp_header->dst));
+      // DHCP identifier
       if (udp_header->dst == DHCP_PORT_CLIENT) {
         id.protocol = CON_DHCP;
         struct dhcp_packet *dhcp_packet =
           (struct dhcp_packet *)((uint8 *)udp_header + sizeof(struct udp_header));
         id.identification.dhcp.transaction_id = dhcp_packet->transaction_id;
+        // Loop through options to find message type. Since DHCP packets MUST contain options this loop will terminate
+        uint8* dhcp_options = dhcp_packet->options;
+        while (*dhcp_options != DHCP_OPTIONS_MESSAGE_TYPE_NUM)
+          dhcp_options++;
+        id.identification.dhcp.message_type = dhcp_options[2];
       } else {
         pr_notice("Not supported: Dropping UDP %x\n", udp_header->dst);
       }

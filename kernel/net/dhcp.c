@@ -1,71 +1,58 @@
 #include "kernel/net/dhcp.h"
 
-void dhcp_get_ip_address()
+void dhcp_get_ip_address(uint8 ip_address[IP_ADDR_SIZE])
 {
-    void* buf = kalloc_zero();
-    void* response_buf = kalloc();
-    if (!buf || !response_buf)
-        panic("DHCP kalloc fail");
+  void* buf = kalloc_zero();
+  void* response_buf = kalloc_zero();
+  if (!buf || !response_buf)
+      panic("DHCP kalloc fail");
 
-    struct dhcp_packet* packet = (struct dhcp_packet*) buf;
-    packet->opcode = DHCP_OPCODE_REQUEST;
-    packet->htype  = DHCP_HTYPE_ETHERNET;
-    packet->hlen   = DHCP_HLEN_ETHERNET;
-    packet->hop_count = 0;
-    packet->transaction_id = r_time();
-    memreverse(&packet->transaction_id, sizeof(packet->transaction_id));
-    packet->seconds = 0; // No need to reverse it's 0 anyways
-    packet->flags = DHCP_FLAGS_BROADCAST;
+  struct dhcp_packet* packet = (struct dhcp_packet*) buf;
+  packet->opcode = DHCP_OPCODE_REQUEST;
+  packet->htype  = DHCP_HTYPE_ETHERNET;
+  packet->hlen   = DHCP_HLEN_ETHERNET;
+  packet->hop_count = 0;
+  packet->transaction_id = r_time();
+  memreverse(&packet->transaction_id, sizeof(packet->transaction_id));
+  packet->seconds = 0; // No need to reverse it's 0 anyways
+  packet->flags = DHCP_FLAGS_BROADCAST;
 
-    // Leave all IP addresses at 0
-    copy_card_mac(packet->client_hardware_addr);
-    int options_len = 0;
+  // Leave all IP addresses at 0
+  copy_card_mac(packet->client_hardware_addr);
+  int options_len = 0;
 
-    // Set magic value
-    uint32 dhcp_magic = DHCP_OPTIONS_MAGIC_COOKIE_VALUE;
-    memmove(packet->options + options_len, &dhcp_magic, DHCP_OPTIONS_MAGIC_COOKIE_LEN);
-    options_len += DHCP_OPTIONS_MAGIC_COOKIE_LEN;
-    packet->options[options_len] = DHCP_OPTIONS_MESSAGE_TYPE_NUM;
-    packet->options[options_len + 1] = DHCP_OPTIONS_MESSAGE_TYPE_LEN;
-    packet->options[options_len + 2] = DHCP_OPTIONS_MESSAGE_TYPE_DHCPDISCOVER;
-    options_len += 3;
-    packet->options[options_len] = DHCP_OPTIONS_END;
-    options_len++;
-    uint8 dest_ip[IP_ADDR_SIZE] = IP_ADDR_BROADCAST;
+  // Set magic value
+  uint32 dhcp_magic = DHCP_OPTIONS_MAGIC_COOKIE_VALUE;
+  memmove(packet->options + options_len, &dhcp_magic, DHCP_OPTIONS_MAGIC_COOKIE_LEN);
+  options_len += DHCP_OPTIONS_MAGIC_COOKIE_LEN;
+  packet->options[options_len] = DHCP_OPTIONS_MESSAGE_TYPE_NUM;
+  packet->options[options_len + 1] = DHCP_OPTIONS_MESSAGE_TYPE_LEN;
+  packet->options[options_len + 2] = DHCP_OPTIONS_MESSAGE_TYPE_DHCPDISCOVER;
+  options_len += 3;
+  packet->options[options_len] = DHCP_OPTIONS_END;
+  options_len++;
+  uint8 dest_ip[IP_ADDR_SIZE] = IP_ADDR_BROADCAST;
 
-    connection_identifier id = {.protocol=CON_DHCP, .identification={.dhcp={.transaction_id=packet->transaction_id}}};
+  connection_identifier id = {0};
+  id.identification.dhcp.message_type = DHCP_OPTIONS_MESSAGE_TYPE_DHCPOFFER;
+  id.identification.dhcp.transaction_id = packet->transaction_id;
+  id.protocol = CON_DHCP;
 
-    struct spinlock dhcp_lock = {0};
-    initlock(&dhcp_lock, "DHCP Lock");
-    acquire(&dhcp_lock);
+  struct spinlock dhcp_lock = {0};
+  initlock(&dhcp_lock, "DHCP Lock");
+  acquire(&dhcp_lock);
 
-    send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
-    uint8 accept_response = 1;
-    struct dhcp_packet *response_packet;
+  send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
 
-receive_dhcp_offer:
+  struct dhcp_packet *response_packet;
+
+  // Wait for response
   wait_for_response(id, response_buf, &dhcp_lock);
 
   // If everything went as expected, the next packet should be a DHCPOFFER packet.
   // We might receive more than one offer but since we don't care about specifics, we just choose
   // the first one and ignore the rest.
   response_packet = (struct dhcp_packet *)(response_buf);
-
-  // FIXME: we should maybe make the opcode part of the identifer that we are sleeping on
-  if (response_packet->opcode != DHCP_OPCODE_REPLY) {
-    pr_notice("Received something other than a DHCP reply\n");
-    accept_response = 0;
-  }
-  if (response_packet->transaction_id != packet->transaction_id) {
-    pr_notice("Mismatched DHCP transaction id\n");
-    accept_response = 0;
-  }
-
-  if (!accept_response) {
-    // FIXME: We might have gotten a new response while we were verifying the old one
-    acquire(&dhcp_lock);
-    goto receive_dhcp_offer;
-  }
 
   pr_debug("We were offered ");
   print_ip(response_packet->your_ip_addr);
@@ -90,10 +77,19 @@ receive_dhcp_offer:
   packet->options[options_len] = DHCP_OPTIONS_END;
   options_len++;
 
+  // Set id for expected response
   id.protocol                           = CON_DHCP;
   id.identification.dhcp.transaction_id = packet->transaction_id;
+  id.identification.dhcp.message_type  = DHCP_OPTIONS_MESSAGE_TYPE_DHCPACK;
 
   acquire(&dhcp_lock);
   send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
+  // Await DHCPACK
   wait_for_response(id, response_buf, &dhcp_lock);
+
+  // We got a confirmed DHCPACK for our transaction id
+  response_packet = (struct dhcp_packet *)(response_buf);
+
+  // Copy ip address to return location
+  memmove(ip_address, response_packet->your_ip_addr, IP_ADDR_SIZE);
 }

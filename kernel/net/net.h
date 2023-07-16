@@ -28,6 +28,7 @@ enum protocol {
 /**
  * Identifier for a specific connection. 
  * Used to get buffer from connections array to wake/notify waiting processes and supply received data
+ * Initialize with = {0}!
 */
 typedef struct __connection_identifier {
     uint16 protocol;
@@ -48,6 +49,7 @@ typedef struct __connection_identifier {
         } udp;
         struct dhcp {
             uint32 transaction_id;
+            uint8 message_type;
         } dhcp;
         struct icmp {
             uint32 sequence_num;

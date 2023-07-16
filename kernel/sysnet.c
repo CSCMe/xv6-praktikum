@@ -15,6 +15,5 @@ uint64 sys_net_test(void) {
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
 
-  dhcp_get_ip_address();
   return 0;
 }
