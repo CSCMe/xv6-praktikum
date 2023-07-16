@@ -101,11 +101,14 @@ struct ipv4_header {
     uint8 data[];
 };
 
+#define IPV4_HEADER_SIZE sizeof(struct ipv4_header);
+
 void print_ip(uint8 ip[]);
 void test_send_ip();
 void ip_init();
 void send_ipv4_packet(uint8 destination[IP_ADDR_SIZE], uint8 ip_protocol, void* data, uint16 data_length);
 void copy_ip_addr(uint8 copy_to[IP_ADDR_SIZE]);
+uint16 ipv4_checksum(void *ip_header);
 
 #ifdef __cplusplus
 }

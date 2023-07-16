@@ -69,7 +69,8 @@ send_ipv4_packet(uint8 destination[IP_ADDR_SIZE], uint8 ip_protocol, void* data,
   // Set protocol
   header->protocol = ip_protocol;
 
-  // No checksum for now. TODO: Add calculation
+  // Checksum is calculated only after the rest of
+  // the header is completed. For now, it is left as zero
   header->header_checksum = 0;
 
   // Copy own IP-Address
@@ -83,12 +84,48 @@ send_ipv4_packet(uint8 destination[IP_ADDR_SIZE], uint8 ip_protocol, void* data,
 
   // Default mac is broadcast
   uint8 mac_dest[6] = MAC_ADDR_BROADCAST;
+
+  // Calculate the checksum
+  header->header_checksum = ipv4_checksum(header);
+
+  // For debug purposes, verify said checksum
+  // The IPv4 checksum should complement the header such that
+  // calculating the checksum again should yield zero.
+  uint16 checksum_verify = ipv4_checksum(header);
+  if (checksum_verify != 0) {
+    pr_emerg("IPv4 checksum failed: Should be 0 but is 0x%x\n", checksum_verify);
+    pr_emerg("This will cause our packet to be dropped!\n");
+    pr_emerg("(That being said, let's try sending it anyways ¯\\_(ツ)_/¯)\n");
+  }
+
   get_mac_for_ip(mac_dest, header->dst); // TODO: implement
   send_ethernet_packet(mac_dest, ETHERNET_TYPE_IPv4, header, (sizeof(struct ipv4_header)) + data_length);
   // Don't forget to free temp buffer at the end
   kfree(buf);
 }
 
+// From https://web.archive.org/web/20120430075019/http://web.eecs.utk.edu/~cs594np/unp/checksum.html
+// Refer to https://en.wikipedia.org/wiki/Internet_checksum for an explanation of how
+// the checksum is calculated.
+// Actually implementing this is nontrivial because you have to take care of numeric overflows
+uint16 ipv4_checksum(void* ip) {
+  uint16 remaining_length = IPV4_HEADER_SIZE;
+  uint32 sum = 0;
+
+  while (remaining_length > 1) {
+    sum += *((uint16 *)ip);
+    ip += 2;
+    if (sum & 0x80000000) /* if high order bit set, fold */
+      sum = (sum & 0xFFFF) + (sum >> 16);
+    remaining_length -= 2;
+  }
+  if (remaining_length != 0) /* take care of left over byte */
+    sum += (uint16) * (uint8 *)ip;
+
+  while (sum >> 16) sum = (sum & 0xFFFF) + (sum >> 16);
+
+  return ~sum;
+}
 
 void
 test_send_ip()
