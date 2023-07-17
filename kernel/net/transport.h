@@ -21,8 +21,9 @@ extern "C" {
 struct udp_pseudo_header {
     uint8 src_ip[IP_ADDR_SIZE];
     uint8 dst_ip[IP_ADDR_SIZE];
-    uint16 zero;
-    uint16 prot_id;
+    uint8 zero;
+    uint8 prot_id;
+    // Make sure to convert endianness of len
     uint16 len;
 };
 
