@@ -24,11 +24,9 @@ uint32 calculate_pseudo_header_checksum(uint8 src_ip[IP_ADDR_SIZE], uint8 dst_ip
     pseudo->prot_id = prot_id;
     uint32 result = 0;
     for (int i = 0; i < sizeof(struct udp_pseudo_header ) / 2; i++) {
-        pr_info("%x\n",space[i]);
         result += space[i];
     }
 
-    pr_debug("pseudo chk:%x\n", result);
     return result;
 }
 
@@ -89,7 +87,7 @@ void send_udp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint1
     // Set and convert endian of length
     header->len = data_length + sizeof(struct udp_header);
     memreverse(&header->len, sizeof(header->len));
-    // TODO: Add checksum calculation;
+
     memmove(header->data, data, data_length);
 
     // Checksum calculation
