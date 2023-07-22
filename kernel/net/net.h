@@ -38,14 +38,14 @@ typedef struct __connection_identifier {
           uint8 target_ip[IP_ADDR_SIZE];
         } arp;
         struct tcp {
-            uint8  dst_ip_addr[IP_ADDR_SIZE];
-            uint16 dst_port;
-            uint16 src_port;
+            uint8  partner_ip_addr[IP_ADDR_SIZE];
+            uint16 partner_port;
+            uint16 in_port;
         } tcp;
         struct udp {
-            uint8  dst_ip_addr[IP_ADDR_SIZE];
-            uint16 dst_port;
-            uint16 src_port;
+            uint8  partner_ip_addr[IP_ADDR_SIZE];
+            uint16 partner_port;
+            uint16 in_port;
         } udp;
         struct dhcp {
             uint32 transaction_id;

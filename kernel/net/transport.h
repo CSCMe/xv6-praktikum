@@ -11,6 +11,9 @@
 extern "C" {
 #endif
 
+// Size of tcp_connection_table
+#define TCP_CONNECTION_TABLE_SIZE 32
+
 // ID used in prot_id field of pseudo header
 #define UDP_PROTOCOL_ID 17
 
@@ -45,21 +48,21 @@ struct udp_header {
  * TCP Header flags
 */
 // Do not use
-#define TCP_FLAGS_CWR
+#define TCP_FLAGS_CWR 0b10000000
 // Do not use
-#define TCP_FLAGS_ECE
+#define TCP_FLAGS_ECE 0b1000000
 // Set if urgent pointer is used. (Which it normally isn't)
-#define TCP_FLAGS_URG
+#define TCP_FLAGS_URG 0b100000
 // Marks this segment as an ACK
-#define TCP_FLAGS_ACK
+#define TCP_FLAGS_ACK 0b10000
 // Signals data to be forwarded immediately. Normally unused
-#define TCP_FLAGS_PSH
+#define TCP_FLAGS_PSH 0b1000
 // Used to reset connection
-#define TCP_FLAGS_RST
+#define TCP_FLAGS_RST 0b100
 // Used in TCP connection setup
-#define TCP_FLAGS_SYN
+#define TCP_FLAGS_SYN 0b10
 // Indicates sender does not want to send any more data
-#define TCP_FLAGS_FIN
+#define TCP_FLAGS_FIN 0b1
 
 
 /**
@@ -77,15 +80,19 @@ struct tcp_header {
     uint32 ack_num;
     /**
      * Bit field containing flags, offset and reserved fields
-     * Reversed for endian reasons
+     * Reversed for endian reasons. Union to enable additional reversal
     */
-    struct {
-        // Flags field
-        uint16 flags : 6;
-        uint16 : 6;
-        // Number of 32-bit words in header
-        uint16 offset : 4;
+    union {
+        struct {
+            // Flags field
+            uint16 flags : 6;
+            uint16 : 6;
+            // Number of 32-bit words in header
+            uint16 offset : 4;
+        };
+        uint16 combined_flag_offset;
     };
+
     // Used for congestion control
     uint16 receive_window;
     // Checksum over TCPHeader, data and pseudoheader
@@ -96,9 +103,45 @@ struct tcp_header {
     uint8 data[];
 };
 
+#define TCP_STATUS_INVALID      0
+// We're reserving this entry
+#define TCP_STATUS_RESERVED     0x1
+// We're currently establishing the connection. Might not be needed
+#define TCP_STATUS_ESTABLISHING 0x2
+// We're waiting for an incoming connection on in_port
+#define TCP_STATUS_AWAITING     0x4
+//The connection has been established. Ready to send/receive data
+#define TCP_STATUS_ESTABLISHED  0x8
+
+/**
+ * Struct for tcp_connection_table entries
+*/
+typedef struct __tcp_connection {
+    // Connection status.
+    uint8 status;
+    // Port for incoming messages for this connection
+    uint16 in_port;
+    // Port for outgoing messages for this connection
+    uint16 partner_port;
+    // partner ip address
+    uint8 partner_ip_addr[IP_ADDR_SIZE];
+    // Sequence number of last sent byte
+    uint32 current_seq_num;
+    // Last received ack number (= next expected sequence number)
+    uint32 last_ack_num;
+    // How many bytes we can receive next
+    uint16 receive_window_size; 
+    // Buffer for receiving. Size = receive_window_size
+    void* receive_buffer;
+    // Buffer for sending. Holds current_seq_num - last_ack_num bytes to allow for retransmission
+    // Might not be needed
+    void* send_buffer;
+} tcp_connection;
+
 void udp_init();
 void send_udp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
-
+void tcp_init();
+void send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
 #ifdef __cplusplus
 }
 #endif

@@ -15,6 +15,7 @@ net_init()
     arp_init();
     ip_init();
     udp_init();
+    tcp_init();
     init_done++;
   }
 }
@@ -171,6 +172,14 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
       break;
     case IP_PROT_TCP:
       id.protocol = CON_TCP;
+      struct tcp_header* tcp_header = (struct tcp_header*) ((uint8*) ipv4_header + sizeof(struct ipv4_header));
+      // Copy in_port, partner_port, partner_ip, 
+      memreverse((void *)&tcp_header->dst, sizeof(tcp_header->dst));
+      id.identification.tcp.in_port = tcp_header->dst;
+      memreverse((void *)&tcp_header->src, sizeof(tcp_header->src));
+      id.identification.tcp.partner_port = tcp_header->src;
+      memmove(id.identification.tcp.partner_ip_addr, ipv4_header->src, IP_ADDR_SIZE);
+
       pr_notice("Not supported: Dropping TCP\n");
       break;
     case IP_PROT_UDP:
