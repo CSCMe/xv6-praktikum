@@ -99,8 +99,8 @@ struct tcp_header {
     uint16 checksum;
     // relative pointer to important data (?)
     uint16 urgent_pointer;
-    // Data
-    uint8 data[];
+    // Variable sized options and data
+    uint8 options_data[];
 };
 
 #define TCP_STATUS_INVALID      0
@@ -129,7 +129,7 @@ typedef struct __tcp_connection {
     uint32 current_seq_num;
     // Last received ack number (= next expected sequence number)
     uint32 last_ack_num;
-    // How many bytes we can receive next
+    // How many data bytes we can receive next
     uint16 receive_window_size; 
     // Buffer for receiving. Size = receive_window_size
     void* receive_buffer;
@@ -142,6 +142,8 @@ void udp_init();
 void send_udp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
 void tcp_init();
 void send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
+uint8 accept_tcp_connection(uint8 partner_address[IP_ADDR_SIZE], struct tcp_header* tcp_packet, uint16 len);
+
 #ifdef __cplusplus
 }
 #endif

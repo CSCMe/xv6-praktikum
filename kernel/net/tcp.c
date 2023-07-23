@@ -8,7 +8,7 @@ tcp_connection tcp_connection_table[TCP_CONNECTION_TABLE_SIZE] = {0};
  * Returns an index to the table, or -1 on fail.
  * Users are advised to never zero the status of the corresponding entry themselves
 */
-uint8 register_tcp_connection(uint8 status)
+uint8 register_tcp_connection()
 {
     acquire(&tcp_table_lock);
     // Loops through the entire table
@@ -26,19 +26,21 @@ uint8 register_tcp_connection(uint8 status)
 
 /**
  * Closes a tcp connection with index index in the tcp_connection_table
- * Sends a packet with FIN flag if close is set
+ * Sends a packet with FIN flag if connection is already established
 */
-void close_tcp_connection(uint8 index, uint8 close)
+void close_tcp_connection(uint8 index)
 {
+    if (index < 0 || index >= TCP_CONNECTION_TABLE_SIZE)
+        pr_notice("TCO connection index out of range.");
+    tcp_connection* pointer = &tcp_connection_table[index];
 
-    if (close) {
-        // Send packet with FIN flag and await ACK
+    if (pointer->status == TCP_STATUS_ESTABLISHED ) {
+        // Send packet with FIN flag (and await ACK)
         // TODO
     }
 
     // Free Table Entry
     acquire(&tcp_table_lock);
-    tcp_connection* pointer = &tcp_connection_table[index];
     pointer->status = TCP_STATUS_INVALID;
     pointer->in_port = 0;
     pointer->partner_port = 0;
@@ -88,10 +90,44 @@ void tcp_init()
     uint8 dest_address[IP_ADDR_SIZE] = {10,0,2,3};
     uint8 data[] = {1,2,3,4,5,1,2,3,4,5,1,2,3,4,5};
     send_tcp_packet(dest_address, 52525, 1255, data, sizeof(data));
-    
+    // Test listen on port 22
+    uint8 idx = register_tcp_connection();
+    if (idx == -1)
+        return;
+    tcp_connection* entry = &tcp_connection_table[idx];
+    entry->in_port = 22;
+    entry->status = TCP_STATUS_AWAITING;
 }
 
-// Just for testing, need to adapt for general use (add connection idx as a parameter or something)
+/**
+ * Sends packets to accept an incoming tcp connection and updates the tcp_connection entry accordingly
+ * Note that packets in tcp_packet already have dst and src port endianess converted
+ * len is length of tcp_header + tcp_options + tcp_data
+ * returns non-zero on success
+*/
+uint8
+accept_tcp_connection(uint8 partner_address[IP_ADDR_SIZE], struct tcp_header* tcp_packet, uint16 len)
+{
+    connection_identifier id = {0};
+    id.protocol = CON_TCP;
+    id.identification.tcp.in_port = tcp_packet->dst;
+    id.identification.tcp.partner_port = tcp_packet->src;
+    memmove(id.identification.tcp.partner_ip_addr, partner_address, IP_ADDR_SIZE);
+    // Get index for a specific connection
+    uint8 index = get_tcp_connection_index(id);
+    // We aren't expecting this connection.
+    if (index == -1)
+        return 0;
+    tcp_connection* entry = &tcp_connection_table[index];
+    entry->partner_port = tcp_packet->src;
+    pr_debug("%d", len);
+
+    // TODO: Set entry fields while establishing connection
+    // TODO: Actually establish connection :D
+    return 1;
+}
+
+// Just for testing, need to adapt for general use (add connection idx as a parameter or something?)
 void
 send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length)
 {
@@ -113,6 +149,6 @@ send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 des
     memreverse(&head->receive_window, sizeof(head->receive_window));
     head->checksum = 0;
     head->urgent_pointer = 0;
-    memmove(head->data, data, data_length);
+    memmove(head->options_data, data, data_length);
     send_ipv4_packet(dest_address, IP_PROT_TCP, head, sizeof(struct tcp_header) + data_length);
 }

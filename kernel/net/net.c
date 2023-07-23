@@ -80,7 +80,13 @@ int handle_incoming_connection(struct ethernet_header *ethernet_header) {
     struct ipv4_header *ipv4_header =
       (struct ipv4_header *)((uint8 *)ethernet_header + sizeof(struct ethernet_header));
     switch (ipv4_header->protocol) {
-    case IP_PROT_TCP: pr_notice("Unpromted not implemented: Dropping TCP\n"); break;
+    case IP_PROT_TCP: 
+      // Add to tcp table
+      struct tcp_header* tcp_header = (struct tcp_header *) ((uint8 *) ipv4_header + sizeof(struct ipv4_header));
+      memreverse(&ipv4_header->total_length, sizeof(ipv4_header->total_length));
+      if (accept_tcp_connection(ipv4_header->src , tcp_header, ipv4_header->total_length - (ipv4_header->header_length * 4)))
+        pr_info("Accepting TCP connection from: %d.%d.%d.%d:%d, on port: %d\n", ipv4_header->src[0], ipv4_header->src[1], ipv4_header->src[2] ,ipv4_header->src[3], tcp_header->src, tcp_header->dst);
+      break;
     case IP_PROT_UDP: pr_notice("Unpromted not implemented: Dropping UDP\n"); break;
     default:
       pr_notice("Does not support unprompted connection with protocol: %x\n", ipv4_header->protocol);
@@ -122,6 +128,9 @@ connection_entry *get_entry_for_identifier(connection_identifier id) {
   return NULL;
 }
 
+/**
+ * Copies data & header of the highest protocol (ARP/DHCP/TCP) the buf field of a connection_entry pointer.
+*/
 void copy_data_to_entry(connection_entry *entry, struct ethernet_header *ethernet_header) {
   if (entry == NULL) { return; }
 
@@ -136,6 +145,7 @@ void copy_data_to_entry(connection_entry *entry, struct ethernet_header *etherne
     // But we likely don't care about those anyways.
     length = sizeof(struct dhcp_packet);
     break;
+  // TCP, UDP, ICMP are all directly on top of IP so only that header needs to be skipped
   case CON_ICMP:
   case CON_TCP:
   case CON_UDP:
@@ -179,8 +189,6 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
       memreverse((void *)&tcp_header->src, sizeof(tcp_header->src));
       id.identification.tcp.partner_port = tcp_header->src;
       memmove(id.identification.tcp.partner_ip_addr, ipv4_header->src, IP_ADDR_SIZE);
-
-      pr_notice("Not supported: Dropping TCP\n");
       break;
     case IP_PROT_UDP:
       id.protocol = CON_UDP;

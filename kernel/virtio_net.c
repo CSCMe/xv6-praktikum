@@ -269,6 +269,8 @@ virtio_net_intr(){
     // Used buffer notification
     if (reason & 0x1) {
         *R(VIRTIO_MMIO_INTERRUPT_ACK) = 0x1;
+        
+        // Transmit queue return interrupts
         while (net_card.transmit.device->idx % NUM != net_card.transmit.first_used_idx) {
           // Just throw our transmit bufs back into the ring.
           // No special processing (for now?)
@@ -276,13 +278,10 @@ virtio_net_intr(){
           virtio_queue_increment(&net_card.transmit, &net_card.transmit.first_used_idx);
           //pr_info("Recycled transmit\n");
         }
-        // Transmit queue return interrupts
-        /**
-         * TODO
-        */
 
-       while (net_card.receive.device->idx % NUM != net_card.receive.first_used_idx) {
         // Receive interrupts
+        while (net_card.receive.device->idx % NUM != net_card.receive.first_used_idx) {
+          
           struct virtio_net_hdr* ptr;
 
           uint8 desc_index = net_card.receive.device->ring[net_card.receive.first_used_idx].id;
