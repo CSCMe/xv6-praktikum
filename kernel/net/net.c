@@ -88,8 +88,8 @@ int handle_incoming_connection(struct ethernet_header *ethernet_header) {
       // Add to tcp table
       struct tcp_header* tcp_header = (struct tcp_header *) ((uint8 *) ipv4_header + sizeof(struct ipv4_header));
       memreverse(&ipv4_header->total_length, sizeof(ipv4_header->total_length));
-      if (accept_tcp_connection(ipv4_header->src , tcp_header, ipv4_header->total_length - (ipv4_header->header_length * 4)))
-        pr_info("Accepting TCP connection from: %d.%d.%d.%d:%d, on port: %d\n", ipv4_header->src[0], ipv4_header->src[1], ipv4_header->src[2] ,ipv4_header->src[3], tcp_header->src, tcp_header->dst);
+      if (wake_awaiting_connection(ipv4_header->src , tcp_header, ipv4_header->total_length - (ipv4_header->header_length * 4)))
+        pr_info("Waking for TCP connection from: %d.%d.%d.%d:%d, on port: %d\n", ipv4_header->src[0], ipv4_header->src[1], ipv4_header->src[2] ,ipv4_header->src[3], tcp_header->src, tcp_header->dst);
       break;
     case IP_PROT_UDP: pr_notice("Unpromted not implemented: Dropping UDP\n"); break;
     default:
@@ -154,7 +154,8 @@ void copy_data_to_entry(connection_entry *entry, struct ethernet_header *etherne
   case CON_TCP:
   case CON_UDP:
     offset += sizeof(struct ipv4_header);
-    struct ipv4_header *ipv4_header = (struct ipv4_header *)(uint8 *)ethernet_header + sizeof(ethernet_header);
+    struct ipv4_header *ipv4_header = (struct ipv4_header *)((uint8 *)ethernet_header + sizeof(struct ethernet_header));
+    memreverse(&ipv4_header->total_length, sizeof(ipv4_header->total_length));
     length                          = ipv4_header->total_length - (ipv4_header->header_length * 4);
     break;
 
