@@ -16,6 +16,7 @@ extern "C" {
 
 // ID used in prot_id field of pseudo header
 #define UDP_PROTOCOL_ID 17
+#define TCP_PROTOCOL_ID 6
 
 /**
  * Pseudo-Header
@@ -63,6 +64,8 @@ struct udp_header {
 #define TCP_FLAGS_SYN 0b10
 // Indicates sender does not want to send any more data
 #define TCP_FLAGS_FIN 0b1
+// No flags
+#define TCP_FLAGS_NONE 0
 
 
 /**
@@ -125,12 +128,16 @@ typedef struct __tcp_connection {
     uint16 partner_port;
     // partner ip address
     uint8 partner_ip_addr[IP_ADDR_SIZE];
-    // Sequence number of last sent byte
-    uint32 current_seq_num;
-    // Last received ack number (= next expected sequence number)
+    // Sequence number of next sent byte
+    uint32 next_seq_num;
+    // Last received ack number (Everything is fine if == last_ack_num)
     uint32 last_ack_num;
+    // Sequence number of last received data
+    uint32 last_sent_ack_num;
     // How many data bytes we can receive next
     uint16 receive_window_size; 
+    // Where to place new data in receive buffer
+    uint32 receive_buffer_loc;
     // Buffer for receiving. Size = receive_window_size
     void* receive_buffer;
     // Buffer for sending. Holds current_seq_num - last_ack_num bytes to allow for retransmission
@@ -142,7 +149,10 @@ void udp_init();
 void send_udp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
 void tcp_init();
 void send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
-uint8 accept_tcp_connection(uint8 partner_address[IP_ADDR_SIZE], struct tcp_header* tcp_packet, uint16 len);
+void wake_awaiting_connection(uint8 partner_address[IP_ADDR_SIZE], struct tcp_header* tcp_packet, uint16 len);
+
+uint32 calculate_pseudo_header_checksum(uint8 src_ip[IP_ADDR_SIZE], uint8 dst_ip[IP_ADDR_SIZE], uint8 prot_id, uint16 len);
+uint16 calculate_internet_checksum(uint16 len, uint8* data);
 
 #ifdef __cplusplus
 }
