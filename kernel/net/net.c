@@ -40,8 +40,9 @@ void add_connection_entry(connection_identifier id, void *buf) {
 /**
  * Wait for a response. MUST have already inserted an entry with add_connection_entry
  * Checks if response has already arrived, else sleeps
+ * Returns length of highest header + data
 */
-void wait_for_response(connection_identifier id) {
+uint32 wait_for_response(connection_identifier id) {
   acquire(&connections_lock);
   connection_entry* entry = NULL;
   for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
@@ -61,12 +62,15 @@ void wait_for_response(connection_identifier id) {
     sleep(&entry->signal, &connections_lock);
   }
 
+  uint32 length = entry->resp_length; 
   // Reset entry
   entry->signal = 0;
+  entry->resp_length = 0;
   entry->buf    = NULL;
   entry->identifier.identification.value = 0;
   entry->identifier.protocol             = 0;
   release(&connections_lock);
+  return length;
 }
 
 int handle_incoming_connection(struct ethernet_header *ethernet_header) {
@@ -151,14 +155,15 @@ void copy_data_to_entry(connection_entry *entry, struct ethernet_header *etherne
   case CON_UDP:
     offset += sizeof(struct ipv4_header);
     struct ipv4_header *ipv4_header = (struct ipv4_header *)(uint8 *)ethernet_header + sizeof(ethernet_header);
-    length                          = ipv4_header->total_length - ipv4_header->header_length;
+    length                          = ipv4_header->total_length - (ipv4_header->header_length * 4);
     break;
 
   default: return;
   }
   uint8 *data = (uint8 *)ethernet_header + offset;
 
-  memmove(entry->buf, data, length);
+  entry->resp_length = length;
+  memmove(entry->buf, data, entry->resp_length);
 }
 
 connection_identifier compute_identifier(struct ethernet_header *ethernet_header) {
