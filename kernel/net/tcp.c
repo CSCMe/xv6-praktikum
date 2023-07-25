@@ -415,5 +415,4 @@ void tcp_init()
     uint8 dest_address[IP_ADDR_SIZE] = {10,0,2,3};
     uint8 data[] = {1,2,3,4,5,1,2,3,4,5,1,2,3,4,5};
     send_tcp_packet(dest_address, 52525, 1255, data, sizeof(data));
-    await_incoming_tcp_connection(23);
 }

@@ -149,6 +149,9 @@ void udp_init();
 void send_udp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
 void tcp_init();
 void send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length);
+int32 send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length);
+uint8 await_incoming_tcp_connection(uint16 port);
+
 uint8 wake_awaiting_connection(uint8 partner_address[IP_ADDR_SIZE], struct tcp_header* tcp_packet, uint16 len);
 uint32 calculate_pseudo_header_checksum(uint8 src_ip[IP_ADDR_SIZE], uint8 dst_ip[IP_ADDR_SIZE], uint8 prot_id, uint16 len);
 uint16 calculate_internet_checksum(uint16 len, uint8* data);

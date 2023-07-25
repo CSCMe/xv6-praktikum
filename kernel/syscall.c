@@ -105,6 +105,8 @@ extern uint64 sys_futex_init(void);
 extern uint64 sys_futex_wait(void);
 extern uint64 sys_futex_wake(void);
 extern uint64 sys_net_test(void);
+extern uint64 sys_net_bind(void);
+extern uint64 sys_net_send_listen(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -139,8 +141,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_futex_init] sys_futex_init,
 [SYS_futex_wait] sys_futex_wait,
 [SYS_futex_wake] sys_futex_wake,
-[SYS_net_test] sys_net_test
-
+[SYS_net_test] sys_net_test,
+[SYS_net_bind] sys_net_bind,
 };
 
 void

@@ -42,3 +42,5 @@ entry("futex_wait");
 entry("futex_wake");
 entry("futex_init");
 entry("net_test");
+entry("net_bind");
+entry("net_send_listen");
