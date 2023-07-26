@@ -171,56 +171,20 @@ accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
     }
 
     // Set tcp connection fields
-    entry->last_ack_num = 0;
     entry->next_seq_num = r_time();
+    entry->last_sent_ack_num = tcp_packet->sequence_num + 1;
+    entry->receive_window_size = PGSIZE - 300;
 
-    // Build response
-    void* buf = kalloc_zero();
-    if (!buf)
-        panic("TCP SYN accept response buf kalloc\n");
-
-    struct tcp_header* resp_header = (struct tcp_header*) buf;
-    
-    resp_header->src = entry->in_port;
-    resp_header->dst = entry->partner_port;
-    resp_header->sequence_num = entry->next_seq_num;
-    resp_header->ack_num = tcp_packet->sequence_num + 1;
-    resp_header->flags = TCP_FLAGS_ACK | TCP_FLAGS_SYN;
-    resp_header->offset = sizeof(struct tcp_header) / 4;
-
-    resp_header->receive_window = PGSIZE - 300;
-
-    resp_header->urgent_pointer = 0;
-
-    struct tcp_header* final = kalloc_zero();
-    if (!final)
-        panic("TCP SYN final kalloc fail\n");
-
-    tcp_header_convert_endian(resp_header);
-    
-    // Calculate checksum
-    uint8 my_ip[IP_ADDR_SIZE] = {0};
-    copy_ip_addr(my_ip);
-    resp_header->checksum = calculate_tcp_checksum(my_ip, entry->partner_ip_addr, sizeof(struct tcp_header), (uint8*) resp_header);
-
-    add_connection_entry(id, final);
-    send_ipv4_packet(entry->partner_ip_addr, IP_PROT_TCP, resp_header, sizeof(struct tcp_header));
-    wait_for_response(id);
-    
-    pr_debug("%p", final->combined_flag_offset);
-
-    tcp_header_convert_endian(final);
-
-    pr_emerg("Established TCP connection with: %d.%d.%d.%d:%d on port: %d\n", entry->partner_ip_addr[0], entry->partner_ip_addr[1], entry->partner_ip_addr[2], entry->partner_ip_addr[3], entry->partner_port, entry->in_port);
-    entry->last_sent_ack_num = resp_header->ack_num;
-    if (!(final->flags & TCP_FLAGS_ACK) || (final->flags & TCP_FLAGS_SYN)) {
-        pr_notice("TCP Connection failed\n");
-        pr_debug("%p", final->combined_flag_offset);
-        return -1;
-    }
-
-    entry->last_ack_num = final->ack_num;
-    entry->status = TCP_STATUS_ESTABLISHED;
+    // send an empty SYN ACK packet
+    send_tcp_packet_wait_for_ack(connection_index, NULL, 0, TCP_FLAGS_ACK | TCP_FLAGS_SYN);
+    pr_emerg("Established TCP connection with: %d.%d.%d.%d:%d on port: %d\n", 
+        entry->partner_ip_addr[0], 
+        entry->partner_ip_addr[1], 
+        entry->partner_ip_addr[2], 
+        entry->partner_ip_addr[3], 
+        entry->partner_port, 
+        entry->in_port
+    );
     return 1;
 }
 
@@ -242,7 +206,6 @@ send_tcp_ack(uint8 connection_id, uint32 sequence_num, uint32 len)
     header->flags = TCP_FLAGS_ACK;
     header->offset = sizeof(struct tcp_header) / 4;
     header->receive_window = connection->receive_window_size;
-
 
     header->checksum = 0;
     // Set urgent pointer
@@ -281,7 +244,7 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     header->sequence_num = connection->next_seq_num;
     connection->next_seq_num += data_length;
 
-     // Set No flags ( but still correct ack num in case that's important)
+    // Set flags and ack num
     header->ack_num = connection->last_sent_ack_num;
     header->flags = flags;
 
@@ -291,13 +254,17 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
 
     // Copy data to options_data field
     header->receive_window = connection->receive_window_size;
-    // TODO: Add checksum calc
-    header->checksum = 0;
+
     // No urgent pointer
     header->urgent_pointer = 0;
 
     // Convert to correct endianness
     tcp_header_convert_endian(header);
+
+    // Calculate checksum
+    uint8 my_ip[IP_ADDR_SIZE] = {0};
+    copy_ip_addr(my_ip);
+    header->checksum = calculate_tcp_checksum(my_ip, connection->partner_ip_addr, sizeof(struct tcp_header), (uint8 *)header);
 
     // Calculate connection identifier
     connection_identifier id = {0};
@@ -359,7 +326,6 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     }
     return -1;
 }
-
 // Just for testing, need to adapt for general use (add connection idx as a parameter or something?)
 void
 send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length)
