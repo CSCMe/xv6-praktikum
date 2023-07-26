@@ -47,8 +47,8 @@ uint8 register_tcp_connection()
 */
 void close_tcp_connection(uint8 index)
 {
-    if (index < 0 || index >= TCP_CONNECTION_TABLE_SIZE)
-        pr_notice("TCO connection index out of range.");
+    if (index >= TCP_CONNECTION_TABLE_SIZE)
+        pr_notice("TCP connection index out of range.");
     tcp_connection* pointer = &tcp_connection_table[index];
 
     if (pointer->status == TCP_STATUS_ESTABLISHED ) {
@@ -149,7 +149,6 @@ wake_awaiting_connection(uint8 partner_address[IP_ADDR_SIZE], struct tcp_header*
 uint8
 accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
 {   
-
     // Since this is an awaiting connection in_port is already set and IP was set by wake
     tcp_connection* entry = &tcp_connection_table[connection_index];
     entry->partner_port = tcp_packet->src;
@@ -190,9 +189,6 @@ accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
     resp_header->offset = sizeof(struct tcp_header) / 4;
 
     resp_header->receive_window = PGSIZE - 300;
-    
-    // TODO: Checksum
-    resp_header->checksum = 0;
 
     resp_header->urgent_pointer = 0;
 
@@ -222,6 +218,7 @@ accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
         pr_debug("%p", final->combined_flag_offset);
         return -1;
     }
+
     entry->last_ack_num = final->ack_num;
     entry->status = TCP_STATUS_ESTABLISHED;
     return 1;
@@ -254,11 +251,12 @@ send_tcp_ack(uint8 connection_id, uint32 sequence_num, uint32 len)
     // Calculate checksum
     uint8 my_ip[IP_ADDR_SIZE] = {0};
     copy_ip_addr(my_ip);
-    // Actually send this ack.
-    // Don't expect a response.
     tcp_header_convert_endian(header);
     header->checksum = calculate_tcp_checksum(my_ip, connection->partner_ip_addr, sizeof(struct tcp_header), (uint8*) header);
 
+
+    // Actually send this ack.
+    // Don't expect a response.
     send_ipv4_packet(connection->partner_ip_addr, IP_PROT_TCP, header, sizeof(struct tcp_header));
 }
 
@@ -268,7 +266,7 @@ send_tcp_ack(uint8 connection_id, uint32 sequence_num, uint32 len)
  * Else -1
 */
 int32
-send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length)
+send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length, uint16 flags)
 {
     tcp_connection* connection = &tcp_connection_table[connection_id];
     void* send_buf = kalloc_zero();
@@ -285,7 +283,7 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
 
      // Set No flags ( but still correct ack num in case that's important)
     header->ack_num = connection->last_sent_ack_num;
-    header->flags = TCP_FLAGS_NONE;
+    header->flags = flags;
 
     // Size of header in 32 bits
     // No support for sending options
@@ -322,28 +320,39 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     // Update ack num
     if (response->flags & TCP_FLAGS_ACK) {
         if (response->ack_num > connection->last_ack_num) {
-            connection->last_ack_num = connection->last_ack_num;
+            connection->last_ack_num = response->ack_num;
         } else {
             // Error handling? Not right now, thanks. TODO?
             pr_notice("TCP: Lost data on connection id: %d\n", connection_id);
         }
     }
 
+    // If we requested to close the connection, expect the server to respect that
+    // (Don't actually do anything though, if the server doesn't respect our FIN then thats
+    // it's own problem)
+    if (flags & TCP_FLAGS_FIN && !(response->flags & TCP_FLAGS_FIN))
+        pr_notice("Server did not agree to close connection");
+
     // Received new data! Yay. Do something?
     if (response->sequence_num == connection->last_sent_ack_num) {
         // Calculate length of new data
         uint32 resp_data_length = resp_len - (response->offset * 4);
+
         // Copy new data to receive_buffer_loc
+        // Don't actually panic tho
         if (resp_data_length > connection->receive_window_size)
             pr_notice("TCP response larger than receive buffer. Error\n");
-        // Don't actually panic tho
+
         // Copy remaining data to receive buffer
         memmove(connection->receive_buffer + connection->receive_buffer_loc, (uint8*) response + (response->offset * 4), resp_data_length);
+
         // Reduce receive window size
         connection->receive_window_size -= resp_data_length;
+
         // Increase offset for buffer
         uint32 old_buf_loc = connection->receive_buffer_loc;
         connection->receive_buffer_loc += resp_data_length;
+
         // Send ack
         send_tcp_ack(connection_id, response->sequence_num, resp_data_length);
         return old_buf_loc;
@@ -401,7 +410,6 @@ await_incoming_tcp_connection(uint16 port)
     acquire(&needed);
     sleep(entry, &needed);
     release(&needed);
-    pr_debug("what");
     accept_tcp_connection(entry->receive_buffer, idx);
     return idx;
 }
@@ -415,4 +423,19 @@ void tcp_init()
     uint8 dest_address[IP_ADDR_SIZE] = {10,0,2,3};
     uint8 data[] = {1,2,3,4,5,1,2,3,4,5,1,2,3,4,5};
     send_tcp_packet(dest_address, 52525, 1255, data, sizeof(data));
+}
+
+int tcp_unbind(uint8 connection_handle) {
+    if (TCP_CONNECTION_TABLE_SIZE <= connection_handle) {
+        return -1;
+    }
+
+    // Let's be nice and tell our partner that we're not
+    // going to listen to them anymore.
+    send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN);
+
+    acquire(&tcp_table_lock);
+    tcp_connection_table[connection_handle].status = 0;
+    release(&tcp_table_lock);
+    return 0;
 }

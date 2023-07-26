@@ -11,10 +11,19 @@
 
 uint64 sys_net_test(void) {
   net_init();
+
+  // Some ARP testing
   uint8 ip_to_resolve[IP_ADDR_SIZE]      = {10, 0, 2, 2};
   uint8 resolved_mac_addr[MAC_ADDR_SIZE] = {};
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
+
+  // Start a tcp server (port 23 = telnet)
+  uint8 handle = await_incoming_tcp_connection(23);
+
+  // ...and immediately close it
+  tcp_unbind(handle);
+
   pr_info("testnet done\n");
   return 0;
 }
