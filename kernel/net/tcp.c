@@ -220,11 +220,10 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     
     connection->next_seq_num += data_length;
 
-    // Set flags and ack num
-    if (flags & TCP_FLAGS_ACK)
-        header->ack_num = connection->last_sent_ack_num;
+    // Set flags and ack num. For some reason every packet needs the ACK flag
+    header->ack_num = connection->last_sent_ack_num;
     // connection->last_sent_ack_num++;
-    header->flags = flags;
+    header->flags = flags | TCP_FLAGS_ACK;
 
     // Size of header in 32 bits
     // No support for sending options
@@ -404,9 +403,6 @@ void tcp_init()
 {
     initlock(&tcp_table_lock, "TCP Table lock");
     // For now just copied from udp_init to test
-    uint8 dest_address[IP_ADDR_SIZE] = {10,0,2,3};
-    uint8 data[] = {1,2,3,4,5,1,2,3,4,5,1,2,3,4,5};
-    send_tcp_packet(dest_address, 52525, 1255, data, sizeof(data));
 }
 
 int tcp_unbind(uint8 connection_handle) {
