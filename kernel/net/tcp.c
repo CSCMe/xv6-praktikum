@@ -146,7 +146,7 @@ accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
     entry->receive_window_size = PGSIZE - 300;
 
     // send an empty SYN ACK packet
-    send_tcp_packet_wait_for_ack(connection_index, NULL, 0, TCP_FLAGS_ACK | TCP_FLAGS_SYN);
+    send_tcp_packet_wait_for_ack(connection_index, NULL, 0, TCP_FLAGS_ACK | TCP_FLAGS_SYN, 0);
     pr_emerg("Established TCP connection with: %d.%d.%d.%d:%d on port: %d\n", 
         entry->partner_ip_addr[0], 
         entry->partner_ip_addr[1], 
@@ -173,7 +173,7 @@ send_tcp_ack(uint8 connection_id, uint32 sequence_num, uint32 len)
     header->dst = connection->partner_port;
 
     // Sequence num 0 ok?
-    header->sequence_num = 0;
+    header->sequence_num = connection->next_seq_num;
     header->ack_num = sequence_num + len;
     header->flags = TCP_FLAGS_ACK;
     header->offset = sizeof(struct tcp_header) / 4;
@@ -201,11 +201,11 @@ send_tcp_ack(uint8 connection_id, uint32 sequence_num, uint32 len)
  * Else -1
 */
 int32
-send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length, uint16 flags)
+send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length, uint16 flags, void* connection_entry_buffer)
 {
     tcp_connection* connection = &tcp_connection_table[connection_id];
     void* send_buf = kalloc_zero();
-    void* rec_buf = kalloc_zero();
+    void* rec_buf = connection_entry_buffer;
     struct tcp_header* header = (struct tcp_header*) send_buf;
 
     // Set destination and source and flags
@@ -214,10 +214,15 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
 
     // Set sequence number and increase next sequence number
     header->sequence_num = connection->next_seq_num;
-    connection->next_seq_num += data_length + 1;
+    // Only for connection establishing
+    if (data_length == 0 && (flags & TCP_FLAGS_ACK) && (flags & TCP_FLAGS_SYN))
+        connection->next_seq_num++;
+    
+    connection->next_seq_num += data_length;
 
     // Set flags and ack num
-    header->ack_num = connection->last_sent_ack_num;
+    if (flags & TCP_FLAGS_ACK)
+        header->ack_num = connection->last_sent_ack_num;
     // connection->last_sent_ack_num++;
     header->flags = flags;
 
@@ -233,11 +238,11 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
 
     // Convert to correct endianness
     tcp_header_convert_endian(header);
-
+    memmove(header->options_data, data, data_length);
     // Calculate checksum
     uint8 my_ip[IP_ADDR_SIZE] = {0};
     copy_ip_addr(my_ip);
-    header->checksum = calculate_tcp_checksum(my_ip, connection->partner_ip_addr, sizeof(struct tcp_header), (uint8 *)header);
+    header->checksum = calculate_tcp_checksum(my_ip, connection->partner_ip_addr, sizeof(struct tcp_header) + data_length, (uint8 *)header);
 
     // Calculate connection identifier
     connection_identifier id = {0};
@@ -246,10 +251,15 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     id.identification.tcp.partner_port = connection->partner_port;
     memmove(&id.identification.tcp.partner_ip_addr, connection->partner_ip_addr, IP_ADDR_SIZE);
 
+    // Add connection_entry if needed
+    if (connection_entry_buffer == NULL) {
+        rec_buf = kalloc_zero();
+        add_connection_entry(id, rec_buf);
+    }
+    
     // Send packet
-    add_connection_entry(id, rec_buf);
     send_ipv4_packet(connection->partner_ip_addr, IP_PROT_TCP, header, sizeof(struct tcp_header) + data_length);
-    uint32 resp_len = wait_for_response(id);
+    uint32 resp_len = wait_for_response(id, (connection_entry_buffer == NULL));
     kfree(send_buf);
 
     // We now have a response in rec_buf
@@ -304,6 +314,36 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     }
     return -1;
 }
+
+
+int
+tcp_send_receive(int index, void* data, int data_len, void* rec_buf, int rec_buf_len)
+{
+    if (index > TCP_CONNECTION_TABLE_SIZE || tcp_connection_table[index].status != TCP_STATUS_ESTABLISHED) {
+        // Connection not valid. Return
+        return -1;
+    }
+    tcp_connection* entry = &tcp_connection_table[index];
+
+    // Calculate connection identifier
+    connection_identifier id = {0};
+    id.protocol = CON_TCP;
+    id.identification.tcp.in_port = entry->in_port;
+    id.identification.tcp.partner_port = entry->partner_port;
+    memmove(&id.identification.tcp.partner_ip_addr, entry->partner_ip_addr, IP_ADDR_SIZE);
+
+    void* packet_buffer = kalloc_zero();
+    add_connection_entry(id, packet_buffer);
+    int32 offset = send_tcp_packet_wait_for_ack(index, data, data_len, TCP_FLAGS_PSH, packet_buffer);
+    if (offset == -1) {
+        wait_for_response(id, 1);
+    } else {
+        reset_connection_entry(id, 0);
+    }
+
+    return 1;
+}
+
 // Just for testing, need to adapt for general use (add connection idx as a parameter or something?)
 void
 send_tcp_packet(uint8 dest_address[IP_ADDR_SIZE], uint16 source_port, uint16 dest_port, void* data, uint16 data_length)
@@ -382,7 +422,7 @@ int tcp_unbind(uint8 connection_handle) {
         pr_debug("Closing established connection\n");
         // Let's be nice and tell our partner that we're not
         // going to listen to them anymore.
-        send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN);
+        send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN, NULL);
     }
 
     // Free Table Entry

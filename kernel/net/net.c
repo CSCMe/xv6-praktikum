@@ -38,11 +38,38 @@ void add_connection_entry(connection_identifier id, void *buf) {
 }
 
 /**
+ * Resets a connection entry with a specific ID
+*/
+void reset_connection_entry(connection_identifier id, uint8 holding_lock)
+{
+  if (!holding_lock) {
+    acquire(&connections_lock);
+  }
+  connection_entry* entry = NULL;
+  for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
+    if (connections[i].signal != 0 
+        && connections[i].identifier.protocol == id.protocol 
+        && connections[i].identifier.identification.value == id.identification.value) {
+      entry = &connections[i];
+      break;
+    }
+  }
+  entry->signal = 0;
+  entry->resp_length = 0;
+  entry->buf    = NULL;
+  entry->identifier.identification.value = 0;
+  entry->identifier.protocol             = 0;
+  if (!holding_lock) {
+    release(&connections_lock);
+  }
+}
+
+/**
  * Wait for a response. MUST have already inserted an entry with add_connection_entry
  * Checks if response has already arrived, else sleeps
  * Returns length of highest header + data
 */
-uint32 wait_for_response(connection_identifier id) {
+uint32 wait_for_response(connection_identifier id, uint8 reset) {
   acquire(&connections_lock);
   connection_entry* entry = NULL;
   for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
@@ -64,11 +91,11 @@ uint32 wait_for_response(connection_identifier id) {
 
   uint32 length = entry->resp_length; 
   // Reset entry
-  entry->signal = 0;
-  entry->resp_length = 0;
-  entry->buf    = NULL;
-  entry->identifier.identification.value = 0;
-  entry->identifier.protocol             = 0;
+  entry->signal = 1;
+  // If we don't set reset we keep the connection alive
+  if (reset) {
+    reset_connection_entry(id, 1);
+  }
   release(&connections_lock);
   return length;
 }

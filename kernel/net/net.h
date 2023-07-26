@@ -73,7 +73,8 @@ void net_init();
 int handle_incoming_connection(struct ethernet_header* ethernet_header);
 int notify_of_response(struct ethernet_header* ethernet_header);
 void add_connection_entry(connection_identifier id, void *buf);
-uint32 wait_for_response(connection_identifier id);
+uint32 wait_for_response(connection_identifier id, uint8 reset);
+void reset_connection_entry(connection_identifier id, uint8 zero);
 
 void print_mac_addr(uint8 mac_addr[MAC_ADDR_SIZE]);
 

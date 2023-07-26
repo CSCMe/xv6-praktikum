@@ -10,7 +10,8 @@ void main (int argc, char** argv)
         int port = 23;
         int handle = net_bind(port);
         printf("Established connection on port %d\n", port);
-
+        // Send a small packeti in between
+        net_send_listen(handle, NULL, 0, NULL, 0);
         // ...and immediately close it
         net_unbind(handle);
         printf("Done.\n");

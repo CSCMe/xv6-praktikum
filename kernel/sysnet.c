@@ -40,6 +40,25 @@ uint64 sys_net_unbind(void) {
 }
 
 uint64 sys_net_send_listen(void) {
-  pr_emerg("TODO: IMPLEMENT");
-  return -1;
+  uint8 con_id;
+  uint64 send_buffer;
+  int send_buffer_len;
+  uint64 receive_buffer;
+  int receive_buffer_len;
+  argint(0, (int*)&con_id);
+  argaddr(1, &send_buffer);
+  argint(2, &send_buffer_len);
+  argaddr(3, &receive_buffer);
+  argint(4, &receive_buffer_len);
+
+  uint8 data[5] = {'b', 'a', 'c','\r','\n'};
+  send_buffer_len = 5;
+  // Somehow convert user addresses to kernel bois
+  void* kernel_send_buffer = data;
+  void* kernel_receive_buffer = NULL;
+
+  int received_data_len = tcp_send_receive(con_id, kernel_send_buffer, send_buffer_len, kernel_receive_buffer, receive_buffer_len);
+
+
+  return received_data_len;
 }

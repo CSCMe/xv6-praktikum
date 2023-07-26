@@ -144,6 +144,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_futex_wake] sys_futex_wake,
 [SYS_net_test] sys_net_test,
 [SYS_net_bind] sys_net_bind,
+[SYS_net_send_listen] sys_net_send_listen,
 [SYS_net_unbind] sys_net_unbind,
 };
 
