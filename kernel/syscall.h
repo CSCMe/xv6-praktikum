@@ -40,6 +40,7 @@ extern "C" {
 #define SYS_net_test 27
 #define SYS_net_bind 28
 #define SYS_net_send_listen 29
+#define SYS_net_unbind 30
 #define SYS_hello_kernel 50
 #define SYS_printPT 51
 #define SYS_cxx    100

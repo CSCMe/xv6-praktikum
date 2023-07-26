@@ -44,3 +44,4 @@ entry("futex_init");
 entry("net_test");
 entry("net_bind");
 entry("net_send_listen");
+entry("net_unbind");

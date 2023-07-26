@@ -42,36 +42,6 @@ uint8 register_tcp_connection()
 }
 
 /**
- * Closes a tcp connection with index index in the tcp_connection_table
- * Sends a packet with FIN flag if connection is already established
-*/
-void close_tcp_connection(uint8 index)
-{
-    if (index >= TCP_CONNECTION_TABLE_SIZE)
-        pr_notice("TCP connection index out of range.");
-    tcp_connection* pointer = &tcp_connection_table[index];
-
-    if (pointer->status == TCP_STATUS_ESTABLISHED ) {
-        // Send packet with FIN flag (and await ACK)
-        // TODO
-    }
-
-    // Free Table Entry
-    acquire(&tcp_table_lock);
-    pointer->status = TCP_STATUS_INVALID;
-    pointer->in_port = 0;
-    pointer->partner_port = 0;
-    memset(pointer->partner_ip_addr, 0, IP_ADDR_SIZE);
-    pointer->next_seq_num = 0;
-    pointer->last_ack_num = 0;
-    pointer->last_sent_ack_num = 0;
-    pointer->receive_window_size = 0;
-    kfree(pointer->receive_buffer);
-    kfree(pointer->send_buffer);
-    release(&tcp_table_lock);
-}
-
-/**
  * Returns index of tcp connection that corresponds to a specific connection_identifier
  * Assumptions:
  * id.protocol == CON_TCP
@@ -84,7 +54,7 @@ uint8 get_tcp_connection_index(connection_identifier id)
     for (int i = 0; i < TCP_CONNECTION_TABLE_SIZE; i++)
     {
         tcp_connection* entry = &tcp_connection_table[i];
-        // Check if in port macthes
+        // Check if in port matches
         if (id.identification.tcp.in_port == entry->in_port) {
             // If in port matches either TCP_STATUS_AWAITING or everything matches
             if (entry->status == TCP_STATUS_AWAITING 
@@ -185,6 +155,7 @@ accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
         entry->partner_port, 
         entry->in_port
     );
+    entry->status = TCP_STATUS_ESTABLISHED;
     return 1;
 }
 
@@ -242,10 +213,11 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
 
     // Set sequence number and increase next sequence number
     header->sequence_num = connection->next_seq_num;
-    connection->next_seq_num += data_length;
+    connection->next_seq_num += data_length + 1;
 
     // Set flags and ack num
     header->ack_num = connection->last_sent_ack_num;
+    // connection->last_sent_ack_num++;
     header->flags = flags;
 
     // Size of header in 32 bits
@@ -392,16 +364,33 @@ void tcp_init()
 }
 
 int tcp_unbind(uint8 connection_handle) {
+    pr_debug("Unbinding %d\n", connection_handle);
+
     if (TCP_CONNECTION_TABLE_SIZE <= connection_handle) {
         return -1;
     }
 
-    // Let's be nice and tell our partner that we're not
-    // going to listen to them anymore.
-    send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN);
+    tcp_connection *pointer = &tcp_connection_table[connection_handle];
 
+    if (pointer->status == TCP_STATUS_ESTABLISHED) {
+        pr_debug("Closing established connection\n");
+        // Let's be nice and tell our partner that we're not
+        // going to listen to them anymore.
+        send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN);
+    }
+
+    // Free Table Entry
     acquire(&tcp_table_lock);
-    tcp_connection_table[connection_handle].status = 0;
+    pointer->status       = TCP_STATUS_INVALID;
+    pointer->in_port      = 0;
+    pointer->partner_port = 0;
+    memset(pointer->partner_ip_addr, 0, IP_ADDR_SIZE);
+    pointer->next_seq_num        = 0;
+    pointer->last_ack_num        = 0;
+    pointer->last_sent_ack_num   = 0;
+    pointer->receive_window_size = 0;
+    kfree(pointer->receive_buffer);
+    kfree(pointer->send_buffer);
     release(&tcp_table_lock);
     return 0;
 }

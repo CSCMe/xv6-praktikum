@@ -18,21 +18,25 @@ uint64 sys_net_test(void) {
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
   get_mac_for_ip(resolved_mac_addr, ip_to_resolve);
 
-  // Start a tcp server (port 23 = telnet)
-  uint8 handle = await_incoming_tcp_connection(23);
-
-  // ...and immediately close it
-  tcp_unbind(handle);
-
   pr_info("testnet done\n");
   return 0;
 }
 
 uint64 sys_net_bind(void) {
   net_init();
+
   uint8 port;
   argint(0, (int*) &port);
+
   return await_incoming_tcp_connection(port);
+}
+
+uint64 sys_net_unbind(void) {
+  uint8 handle;
+  argint(0, (int *)&handle);
+
+  tcp_unbind(handle);
+  return 0;
 }
 
 uint64 sys_net_send_listen(void) {
