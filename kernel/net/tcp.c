@@ -165,6 +165,7 @@ accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
 void
 send_tcp_ack(uint8 connection_id, uint32 sequence_num, uint32 len)
 {
+    pr_debug("Sending ack\n");
     tcp_connection* connection = &tcp_connection_table[connection_id];
     void* send_buf = kalloc_zero();
     struct tcp_header* header = (struct tcp_header*) send_buf;
@@ -277,24 +278,29 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
         // Calculate length of new data
         uint32 resp_data_length = resp_len - (response->offset * 4);
 
-        // Copy new data to receive_buffer_loc
-        // Don't actually panic tho
-        if (resp_data_length > connection->receive_window_size)
-            pr_notice("TCP response larger than receive buffer. Error\n");
+        // We don't need to acknowledge (or care about) the data inside 
+        // an empty packet.
+        if (resp_data_length != 0) {
+            // Copy new data to receive_buffer_loc
+            // Don't actually panic tho
+            if (resp_data_length > connection->receive_window_size)
+                pr_notice("TCP response larger than receive buffer. Error\n");
 
-        // Copy remaining data to receive buffer
-        memmove(connection->receive_buffer + connection->receive_buffer_loc, (uint8*) response + (response->offset * 4), resp_data_length);
+            // Copy remaining data to receive buffer
+            memmove(connection->receive_buffer + connection->receive_buffer_loc, (uint8*) response + (response->offset * 4), resp_data_length);
 
-        // Reduce receive window size
-        connection->receive_window_size -= resp_data_length;
+            // Reduce receive window size
+            connection->receive_window_size -= resp_data_length;
 
-        // Increase offset for buffer
-        uint32 old_buf_loc = connection->receive_buffer_loc;
-        connection->receive_buffer_loc += resp_data_length;
+            // Increase offset for buffer
+            uint32 old_buf_loc = connection->receive_buffer_loc;
+            connection->receive_buffer_loc += resp_data_length;
 
-        // Send ack
-        send_tcp_ack(connection_id, response->sequence_num, resp_data_length);
-        return old_buf_loc;
+            // Send ack
+            send_tcp_ack(connection_id, response->sequence_num, resp_data_length);
+
+            return old_buf_loc;
+        }
     }
     return -1;
 }
