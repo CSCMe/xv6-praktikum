@@ -11,9 +11,11 @@ extern "C" {
 
 
 #define MAC_ADDR_SIZE 6
-#define MAC_ADDR_BROADCAST {0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+#define MAC_ADDR_BROADCAST                                                                         \
+  { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff }
 #define IP_ADDR_SIZE 4
-#define IP_ADDR_BROADCAST  {255, 255, 255, 255}
+#define IP_ADDR_BROADCAST                                                                          \
+  { 255, 255, 255, 255 }
 
 #ifdef __cplusplus
 }

@@ -6,11 +6,9 @@
 
 static connection_entry connections[MAX_TRACKED_CONNECTIONS] = {0};
 static struct spinlock connections_lock                      = {0};
-static int init_done = 0;
+static int init_done                                         = 0;
 
-void
-net_init()
-{
+void net_init() {
   if (init_done == 0) {
     initlock(&connections_lock, "Connection Tracker Lock");
     arp_init();
@@ -39,7 +37,7 @@ void add_connection_entry(connection_identifier id, void *buf) {
 }
 
 // Do NOT call unless you are holding the connections lock!
-connection_entry* get_active_entry(connection_identifier id) {
+connection_entry *get_active_entry(connection_identifier id) {
   connection_entry *entry = NULL;
   for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
     if (connections[i].signal != 0 && connections[i].identifier.protocol == id.protocol &&
@@ -54,26 +52,20 @@ connection_entry* get_active_entry(connection_identifier id) {
 /**
  * Resets a connection entry with a specific ID
 */
-void reset_connection_entry(connection_identifier id, uint8 holding_lock)
-{
-  if (!holding_lock) {
-    acquire(&connections_lock);
-  }
+void reset_connection_entry(connection_identifier id, uint8 holding_lock) {
+  if (!holding_lock) { acquire(&connections_lock); }
 
   connection_entry *entry = get_active_entry(id);
 
-  if (!entry)
-    panic("Resetting nonexistent connection");
-  
-  entry->signal = 0;
-  entry->resp_length = 0;
-  entry->buf    = NULL;
+  if (!entry) panic("Resetting nonexistent connection");
+
+  entry->signal                          = 0;
+  entry->resp_length                     = 0;
+  entry->buf                             = NULL;
   entry->identifier.identification.value = 0;
   entry->identifier.protocol             = 0;
 
-  if (!holding_lock) {
-    release(&connections_lock);
-  }
+  if (!holding_lock) { release(&connections_lock); }
 }
 
 /**
@@ -86,24 +78,19 @@ uint32 wait_for_response(connection_identifier id, uint8 reset) {
 
   connection_entry *entry = get_active_entry(id);
 
-  if (entry == NULL)
-    panic("Waiting on non-existent table entry\n");
-  
-  // Response hasn't arrived yet? Sleep on it
-  if (entry->signal == 1) {
-    sleep(&entry->signal, &connections_lock);
-  }
+  if (entry == NULL) panic("Waiting on non-existent table entry\n");
 
-  uint32 length = entry->resp_length; 
-  
+  // Response hasn't arrived yet? Sleep on it
+  if (entry->signal == 1) { sleep(&entry->signal, &connections_lock); }
+
+  uint32 length = entry->resp_length;
+
   // Reset entry
   entry->signal = 1;
 
   // If we don't set reset we keep the connection alive
-  if (reset) {
-    reset_connection_entry(id, 1);
-  }
-  
+  if (reset) { reset_connection_entry(id, 1); }
+
   release(&connections_lock);
   return length;
 }
@@ -119,12 +106,15 @@ int handle_incoming_connection(struct ethernet_header *ethernet_header) {
     struct ipv4_header *ipv4_header =
       (struct ipv4_header *)((uint8 *)ethernet_header + sizeof(struct ethernet_header));
     switch (ipv4_header->protocol) {
-    case IP_PROT_TCP: 
+    case IP_PROT_TCP:
       // Add to tcp table
-      struct tcp_header* tcp_header = (struct tcp_header *) ((uint8 *) ipv4_header + sizeof(struct ipv4_header));
+      struct tcp_header *tcp_header =
+        (struct tcp_header *)((uint8 *)ipv4_header + sizeof(struct ipv4_header));
       memreverse(&ipv4_header->total_length, sizeof(ipv4_header->total_length));
-      if (wake_awaiting_connection(ipv4_header->src , tcp_header, ipv4_header->total_length - (ipv4_header->header_length * 4)))
-        pr_info("Waking for TCP connection from: %d.%d.%d.%d:%d, on port: %d\n", ipv4_header->src[0], ipv4_header->src[1], ipv4_header->src[2] ,ipv4_header->src[3], tcp_header->src, tcp_header->dst);
+      if (wake_awaiting_connection(ipv4_header->src, tcp_header,
+            ipv4_header->total_length - (ipv4_header->header_length * 4)))
+        pr_info("Waking for TCP connection from: %d.%d.%d.%d:%d, on port: %d\n", ipv4_header->src[0],
+          ipv4_header->src[1], ipv4_header->src[2], ipv4_header->src[3], tcp_header->src, tcp_header->dst);
       break;
     case IP_PROT_UDP: pr_notice("Unpromted not implemented: Dropping UDP\n"); break;
     default:
@@ -189,9 +179,10 @@ void copy_data_to_entry(connection_entry *entry, struct ethernet_header *etherne
   case CON_TCP:
   case CON_UDP:
     offset += sizeof(struct ipv4_header);
-    struct ipv4_header *ipv4_header = (struct ipv4_header *)((uint8 *)ethernet_header + sizeof(struct ethernet_header));
+    struct ipv4_header *ipv4_header =
+      (struct ipv4_header *)((uint8 *)ethernet_header + sizeof(struct ethernet_header));
     memreverse(&ipv4_header->total_length, sizeof(ipv4_header->total_length));
-    length                          = ipv4_header->total_length - (ipv4_header->header_length * 4);
+    length = ipv4_header->total_length - (ipv4_header->header_length * 4);
     break;
 
   default: return;
@@ -223,8 +214,9 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
       break;
     case IP_PROT_TCP:
       id.protocol = CON_TCP;
-      struct tcp_header* tcp_header = (struct tcp_header*) ((uint8*) ipv4_header + sizeof(struct ipv4_header));
-      // Copy in_port, partner_port, partner_ip, 
+      struct tcp_header *tcp_header =
+        (struct tcp_header *)((uint8 *)ipv4_header + sizeof(struct ipv4_header));
+      // Copy in_port, partner_port, partner_ip,
       memreverse((void *)&tcp_header->dst, sizeof(tcp_header->dst));
       id.identification.tcp.in_port = tcp_header->dst;
       memreverse((void *)&tcp_header->src, sizeof(tcp_header->src));
@@ -233,7 +225,8 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
       break;
     case IP_PROT_UDP:
       id.protocol = CON_UDP;
-      struct udp_header* udp_header = (struct udp_header*) ((uint8*) ipv4_header + sizeof(struct ipv4_header));
+      struct udp_header *udp_header =
+        (struct udp_header *)((uint8 *)ipv4_header + sizeof(struct ipv4_header));
       memreverse((void *)&udp_header->dst, sizeof(udp_header->dst));
       // DHCP identifier
       if (udp_header->dst == DHCP_PORT_CLIENT) {
@@ -242,9 +235,8 @@ connection_identifier compute_identifier(struct ethernet_header *ethernet_header
           (struct dhcp_packet *)((uint8 *)udp_header + sizeof(struct udp_header));
         id.identification.dhcp.transaction_id = dhcp_packet->transaction_id;
         // Loop through options to find message type. Since DHCP packets MUST contain options this loop will terminate
-        uint8* dhcp_options = dhcp_packet->options;
-        while (*dhcp_options != DHCP_OPTIONS_MESSAGE_TYPE_NUM)
-          dhcp_options++;
+        uint8 *dhcp_options = dhcp_packet->options;
+        while (*dhcp_options != DHCP_OPTIONS_MESSAGE_TYPE_NUM) dhcp_options++;
         id.identification.dhcp.message_type = dhcp_options[2];
       } else {
         pr_notice("Not supported: Dropping UDP %x\n", udp_header->dst);

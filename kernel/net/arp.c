@@ -15,7 +15,7 @@ void arp_init() {
   arp_table.index = 0;
 
   // Insert broadcast address
-  uint8 ip_broadcst[IP_ADDR_SIZE] = IP_ADDR_BROADCAST;
+  uint8 ip_broadcst[IP_ADDR_SIZE]    = IP_ADDR_BROADCAST;
   uint8 mac_broadcast[MAC_ADDR_SIZE] = MAC_ADDR_BROADCAST;
   arp_table_insert(ip_broadcst, mac_broadcast);
 }
@@ -49,9 +49,7 @@ void arp_table_insert(uint8 ip_addr[], uint8 mac_addr[]) {
 
 void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
   // Check if the ARP table has the mac address cached
-  if (arp_table_lookup(ip_addr, mac_addr)) {
-    return;
-  }
+  if (arp_table_lookup(ip_addr, mac_addr)) { return; }
 
   struct arp_packet arp;
   arp.hw_type   = ARP_HW_TYPE_ETHERNET;
