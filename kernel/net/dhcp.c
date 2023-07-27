@@ -44,7 +44,7 @@ void dhcp_get_ip_address(uint8 ip_address[IP_ADDR_SIZE]) {
   struct dhcp_packet *response_packet;
 
   // Wait for response
-  wait_for_response(id);
+  wait_for_response(id, 1);
 
   // If everything went as expected, the next packet should be a DHCPOFFER packet.
   // We might receive more than one offer but since we don't care about specifics, we just choose
@@ -83,7 +83,7 @@ void dhcp_get_ip_address(uint8 ip_address[IP_ADDR_SIZE]) {
 
   send_udp_packet(dest_ip, DHCP_PORT_CLIENT, DHCP_PORT_SERVER, buf, sizeof(struct dhcp_packet) + options_len);
   // Await DHCPACK
-  wait_for_response(id);
+  wait_for_response(id, 1);
 
   // We got a confirmed DHCPACK for our transaction id
   response_packet = (struct dhcp_packet *)(response_buf);
