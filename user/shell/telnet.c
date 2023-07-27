@@ -13,6 +13,31 @@ int main(void) {
   int handle = net_bind(port);
   printf("Established connection\n");
 
+  // Send welcome message
+  char* welcome =
+  "=============================\n"
+  " ________________            \n"
+  " < Happy Hacking! >          \n"
+  " ----------------            \n"
+  "       \\   ^__^             \n"
+  "        \\  (oo)\\_______    \n"
+  "           (__)\\       )\\/\\\n"
+  "               ||----w |     \n"
+  "               ||     ||     \n"
+  "=============================\n";
+  char* currentLineStart = welcome;
+  char* currentCharacter = welcome;
+  int lineLength = 0;
+  while(*currentCharacter) {
+    lineLength++;
+    if (*currentCharacter == '\n') {
+      net_send_listen(handle, currentLineStart, lineLength, NULL, 0);
+      currentLineStart = currentCharacter + 1;
+      lineLength = 0;
+    }
+    currentCharacter++;
+  }
+
   // Read and run input commands.
   for(;;) {
     memset(buf, 0, sizeof(buf));
