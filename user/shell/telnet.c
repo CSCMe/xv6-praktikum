@@ -24,9 +24,14 @@ int main(void) {
 
   // Read and run input commands.
   for(;;) {
+    memset(buf, 0, sizeof(buf));
+
     // Receive a command
     char prompt[] = "$ ";
+    printf("before %d\n", strlen(buf));
     net_send_listen(handle, prompt, sizeof(prompt), buf, sizeof(buf));
+    printf("after %d\n", strlen(buf));
+
     printf("Got command: %s\n", buf);
 
     if (buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' ') {

@@ -7,6 +7,7 @@
 static connection_entry connections[MAX_TRACKED_CONNECTIONS] = {0};
 static struct spinlock connections_lock                      = {0};
 static int init_done = 0;
+
 void
 net_init()
 {
@@ -37,6 +38,19 @@ void add_connection_entry(connection_identifier id, void *buf) {
   panic("No free slot for waiting for response\n");
 }
 
+// Do NOT call unless you are holding the connections lock!
+connection_entry* get_active_entry(connection_identifier id) {
+  connection_entry *entry = NULL;
+  for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
+    if (connections[i].signal != 0 && connections[i].identifier.protocol == id.protocol &&
+        connections[i].identifier.identification.value == id.identification.value) {
+      entry = &connections[i];
+      break;
+    }
+  }
+  return entry;
+}
+
 /**
  * Resets a connection entry with a specific ID
 */
@@ -45,20 +59,18 @@ void reset_connection_entry(connection_identifier id, uint8 holding_lock)
   if (!holding_lock) {
     acquire(&connections_lock);
   }
-  connection_entry* entry = NULL;
-  for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
-    if (connections[i].signal != 0 
-        && connections[i].identifier.protocol == id.protocol 
-        && connections[i].identifier.identification.value == id.identification.value) {
-      entry = &connections[i];
-      break;
-    }
-  }
+
+  connection_entry *entry = get_active_entry(id);
+
+  if (!entry)
+    panic("Resetting nonexistent connection");
+  
   entry->signal = 0;
   entry->resp_length = 0;
   entry->buf    = NULL;
   entry->identifier.identification.value = 0;
   entry->identifier.protocol             = 0;
+
   if (!holding_lock) {
     release(&connections_lock);
   }
@@ -71,15 +83,8 @@ void reset_connection_entry(connection_identifier id, uint8 holding_lock)
 */
 uint32 wait_for_response(connection_identifier id, uint8 reset) {
   acquire(&connections_lock);
-  connection_entry* entry = NULL;
-  for (int i = 0; i < MAX_TRACKED_CONNECTIONS; i++) {
-    if (connections[i].signal != 0 
-        && connections[i].identifier.protocol == id.protocol 
-        && connections[i].identifier.identification.value == id.identification.value) {
-      entry = &connections[i];
-      break;
-    }
-  }
+
+  connection_entry *entry = get_active_entry(id);
 
   if (entry == NULL)
     panic("Waiting on non-existent table entry\n");
@@ -90,10 +95,13 @@ uint32 wait_for_response(connection_identifier id, uint8 reset) {
   }
 
   uint32 length = entry->resp_length; 
+  
   // Reset entry
   entry->signal = 1;
+
   // If we don't set reset we keep the connection alive
   if (reset) {
+    pr_debug("resetting %p with buffer %p\n", entry, entry->buf);
     reset_connection_entry(id, 1);
   }
   release(&connections_lock);
@@ -180,6 +188,7 @@ void copy_data_to_entry(connection_entry *entry, struct ethernet_header *etherne
   case CON_ICMP:
   case CON_TCP:
   case CON_UDP:
+    pr_debug("Received a new packet! We should really copy that into the entry!\n");
     offset += sizeof(struct ipv4_header);
     struct ipv4_header *ipv4_header = (struct ipv4_header *)((uint8 *)ethernet_header + sizeof(struct ethernet_header));
     memreverse(&ipv4_header->total_length, sizeof(ipv4_header->total_length));

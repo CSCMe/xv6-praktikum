@@ -265,6 +265,7 @@ virtio_net_init(void)
 void
 virtio_net_intr(){
     acquire(&net_card.net_lock);
+
     int reason = *R(VIRTIO_MMIO_INTERRUPT_STATUS);
     // Used buffer notification
     if (reason & 0x1) {
@@ -276,12 +277,10 @@ virtio_net_intr(){
           // No special processing (for now?)
           
           virtio_queue_increment(&net_card.transmit, &net_card.transmit.first_used_idx);
-          //pr_info("Recycled transmit\n");
         }
 
         // Receive interrupts
         while (net_card.receive.device->idx % NUM != net_card.receive.first_used_idx) {
-          
           struct virtio_net_hdr* ptr;
 
           uint8 desc_index = net_card.receive.device->ring[net_card.receive.first_used_idx].id;
