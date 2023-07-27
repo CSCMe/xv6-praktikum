@@ -364,6 +364,7 @@ tcp_send_receive(int index, void* data, int data_len, void* rec_buf, int rec_buf
         kfree(packet_buffer);
         return received_data_len; 
     } else {
+        reset_connection_entry(id, 0);
         kfree(packet_buffer);
         return -1;
     }
