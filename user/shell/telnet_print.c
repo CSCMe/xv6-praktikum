@@ -8,7 +8,7 @@ int main(int argc, char *argv[]) {
         exit(-1);
     }
 
-    // int handle = atoi(argv[1]);
+    int handle = atoi(argv[1]);
 
     static char buffer[100];
     int empty_lines_in_a_row = 0;
@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
         }
         empty_lines_in_a_row = 0;
 
-        printf("CUSTOM PRINT: %s\n", buffer);
+        net_send_listen(handle, buffer, sizeof(buffer), NULL, 0);
       } else {
         empty_lines_in_a_row += 1;
         if (empty_lines_in_a_row > 100) {
