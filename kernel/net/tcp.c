@@ -238,6 +238,7 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     // Convert to correct endianness
     tcp_header_convert_endian(header);
     memmove(header->options_data, data, data_length);
+
     // Calculate checksum
     uint8 my_ip[IP_ADDR_SIZE] = {0};
     copy_ip_addr(my_ip);
@@ -429,7 +430,6 @@ await_incoming_tcp_connection(uint16 port)
 void tcp_init()
 {
     initlock(&tcp_table_lock, "TCP Table lock");
-    // For now just copied from udp_init to test
 }
 
 int tcp_unbind(uint8 connection_handle) {
@@ -439,27 +439,61 @@ int tcp_unbind(uint8 connection_handle) {
         return -1;
     }
 
-    tcp_connection *pointer = &tcp_connection_table[connection_handle];
+    tcp_connection *connection = &tcp_connection_table[connection_handle];
 
-    if (pointer->status == TCP_STATUS_ESTABLISHED) {
+    if (connection->status == TCP_STATUS_ESTABLISHED) {
         pr_debug("Closing established connection\n");
         // Let's be nice and tell our partner that we're not
         // going to listen to them anymore.
-        send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN, NULL);
+
+        // // The connection shutdown looks like this:
+        // // Client                Server
+        // //       --- FIN ----->
+        // //       <-- ACK ------
+        // //       <-- FIN ------
+        // //       --- ACK ----->
+
+        // // Now the server is going to send us an FIN packet that we have to acknowledge
+        // connection_identifier id           = {0};
+        // id.protocol                        = CON_TCP;
+        // id.identification.tcp.in_port      = connection->in_port;
+        // id.identification.tcp.partner_port = connection->partner_port;
+        // memmove(&id.identification.tcp.partner_ip_addr, connection->partner_ip_addr, IP_ADDR_SIZE);
+
+        // send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN, NULL);
+
+        // // Wait for the server FIN
+        // void* rec_buf = kalloc_zero();
+        // add_connection_entry(id, rec_buf);
+        
+        // uint32 resp_len = wait_for_response(id, (connection_entry_buffer == NULL));
+        // struct tcp_header *response = (struct tcp_header *)rec_buf;
+
+        // // Convert endianess of response to something usable
+        // tcp_header_convert_endian(response);
+
+        // if (response->sequence_num == connection->last_sent_ack_num) {
+        //     pr_debug("RESPONding to final fin");
+        //     // Calculate length of new data
+        //     uint32 resp_data_length = resp_len - (response->offset * 4);
+
+        //     // Send ack
+        //     send_tcp_ack(connection_handle, response->sequence_num, resp_data_length);
+        // }
     }
 
     // Free Table Entry
     acquire(&tcp_table_lock);
-    pointer->status       = TCP_STATUS_INVALID;
-    pointer->in_port      = 0;
-    pointer->partner_port = 0;
-    memset(pointer->partner_ip_addr, 0, IP_ADDR_SIZE);
-    pointer->next_seq_num        = 0;
-    pointer->last_ack_num        = 0;
-    pointer->last_sent_ack_num   = 0;
-    pointer->receive_window_size = 0;
-    kfree(pointer->receive_buffer);
-    kfree(pointer->send_buffer);
+    connection->status       = TCP_STATUS_INVALID;
+    connection->in_port      = 0;
+    connection->partner_port = 0;
+    memset(connection->partner_ip_addr, 0, IP_ADDR_SIZE);
+    connection->next_seq_num        = 0;
+    connection->last_ack_num        = 0;
+    connection->last_sent_ack_num   = 0;
+    connection->receive_window_size = 0;
+    kfree(connection->receive_buffer);
+    kfree(connection->send_buffer);
     release(&tcp_table_lock);
     return 0;
 }
