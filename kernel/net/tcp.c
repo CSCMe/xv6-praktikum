@@ -337,6 +337,7 @@ tcp_send_receive(int index, void* data, int data_len, void* rec_buf, int rec_buf
     void* packet_buffer = kalloc_zero();
     add_connection_entry(id, packet_buffer);
     int32 offset = send_tcp_packet_wait_for_ack(index, data, data_len, TCP_FLAGS_PSH, packet_buffer);
+    
     // Only deal with response if we actually care.
     if (rec_buf != NULL) {
         if (offset == -1) {

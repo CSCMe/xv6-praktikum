@@ -176,6 +176,8 @@ UPROGS=\
 	$O/_test_nmalloc\
 	$O/_test_mmap_file\
 	$U/shell/_sh\
+	$U/shell/_telnet\
+	$U/shell/_telnet_print\
 	shared/tests/_mutex-test\
 #	$U/_futex\
 
