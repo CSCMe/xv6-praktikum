@@ -11,7 +11,10 @@ void main (int argc, char** argv)
         int handle = net_bind(port);
         printf("Established connection on port %d\n", port);
         // Send a small packeti in between
-        net_send_listen(handle, NULL, 0, NULL, 0);
+        char test[] = "Hello World from testnet!\r\n$ ";
+        char answer[100] = {0};
+        net_send_listen(handle, test, sizeof(test), answer, sizeof(answer));
+        printf("Answer: %s", answer);
         // ...and immediately close it
         net_unbind(handle);
         printf("Done.\n");

@@ -331,16 +331,42 @@ tcp_send_receive(int index, void* data, int data_len, void* rec_buf, int rec_buf
     id.identification.tcp.partner_port = entry->partner_port;
     memmove(&id.identification.tcp.partner_ip_addr, entry->partner_ip_addr, IP_ADDR_SIZE);
 
+    int received_data_len = 0;
+    void* received_data_start = NULL;
     void* packet_buffer = kalloc_zero();
     add_connection_entry(id, packet_buffer);
     int32 offset = send_tcp_packet_wait_for_ack(index, data, data_len, TCP_FLAGS_PSH, packet_buffer);
-    if (offset == -1) {
-        wait_for_response(id, 1);
-    } else {
-        reset_connection_entry(id, 0);
-    }
+    // Only deal with response if we actually care.
+    if (rec_buf != NULL) {
+        if (offset == -1) {
+            received_data_len = wait_for_response(id, 1);
+            struct tcp_header* response = (struct tcp_header*) packet_buffer;
+            tcp_header_convert_endian(response);
+            received_data_start = packet_buffer + response->offset * 4;
+            received_data_len -= response->offset * 4;
+        } else {
+            reset_connection_entry(id, 0);
+            // Copy new data to 
+            received_data_len = entry->receive_buffer_loc - entry->receive_window_size;
+            memmove(packet_buffer, entry->receive_buffer + offset, received_data_len);
+            received_data_start = packet_buffer;
+        }
 
-    return 1;
+        if (received_data_len > rec_buf_len) {
+            pr_notice("TCP Receive buffer too small\n");
+            kfree(packet_buffer);
+            return -1;
+        }
+
+        // Copy data to rec buf
+        memmove(rec_buf, received_data_start, received_data_len);
+        // Either case we now have response data somewhere
+        kfree(packet_buffer);
+        return received_data_len; 
+    } else {
+        kfree(packet_buffer);
+        return -1;
+    }
 }
 
 // Just for testing, need to adapt for general use (add connection idx as a parameter or something?)

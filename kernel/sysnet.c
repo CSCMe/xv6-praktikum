@@ -51,14 +51,34 @@ uint64 sys_net_send_listen(void) {
   argaddr(3, &receive_buffer);
   argint(4, &receive_buffer_len);
 
-  uint8 data[5] = {'b', 'a', 'c','\r','\n'};
-  send_buffer_len = 5;
+  if (send_buffer_len > PGSIZE || receive_buffer_len > PGSIZE) {
+    return -1;
+  }
+
   // Somehow convert user addresses to kernel bois
-  void* kernel_send_buffer = data;
+  void* kernel_send_buffer = kalloc_zero();
+
+  if (kernel_send_buffer == NULL) {
+    panic("sys_net_listen kalloc");
+  }
+
+  // Copy data to kernel buffer
+  copyin(myproc()->pagetable, kernel_send_buffer, send_buffer, send_buffer_len);
+
+  // Now set up receive buffers
   void* kernel_receive_buffer = NULL;
+
+  if (receive_buffer != (uint64) NULL) {
+    kernel_receive_buffer = kalloc_zero();
+  }
 
   int received_data_len = tcp_send_receive(con_id, kernel_send_buffer, send_buffer_len, kernel_receive_buffer, receive_buffer_len);
 
+  // Copy data out
+  if (receive_buffer != (uint64) NULL) {
+    copyout(myproc()->pagetable, receive_buffer, kernel_receive_buffer, received_data_len);
+    kfree(kernel_receive_buffer);
+  }
 
   return received_data_len;
 }
