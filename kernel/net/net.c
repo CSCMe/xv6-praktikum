@@ -101,9 +101,9 @@ uint32 wait_for_response(connection_identifier id, uint8 reset) {
 
   // If we don't set reset we keep the connection alive
   if (reset) {
-    pr_debug("resetting %p with buffer %p\n", entry, entry->buf);
     reset_connection_entry(id, 1);
   }
+  
   release(&connections_lock);
   return length;
 }
@@ -188,7 +188,6 @@ void copy_data_to_entry(connection_entry *entry, struct ethernet_header *etherne
   case CON_ICMP:
   case CON_TCP:
   case CON_UDP:
-    pr_debug("Received a new packet! We should really copy that into the entry!\n");
     offset += sizeof(struct ipv4_header);
     struct ipv4_header *ipv4_header = (struct ipv4_header *)((uint8 *)ethernet_header + sizeof(struct ethernet_header));
     memreverse(&ipv4_header->total_length, sizeof(ipv4_header->total_length));

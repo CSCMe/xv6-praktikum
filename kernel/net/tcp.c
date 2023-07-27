@@ -165,7 +165,6 @@ accept_tcp_connection(struct tcp_header* tcp_packet, uint8 connection_index)
 void
 send_tcp_ack(uint8 connection_id, uint32 sequence_num, uint32 len)
 {
-    pr_debug("Sending ack\n");
     tcp_connection* connection = &tcp_connection_table[connection_id];
     void* send_buf = kalloc_zero();
     struct tcp_header* header = (struct tcp_header*) send_buf;
@@ -341,7 +340,6 @@ tcp_send_receive(int index, void* data, int data_len, void* rec_buf, int rec_buf
     // Only deal with response if we actually care.
     if (rec_buf != NULL) {
         if (offset == -1) {
-            pr_debug("eat new response\n");
             // We didn't receive a response previously with the ack, let's wait for one now!
             received_data_len = wait_for_response(id, 1);
             struct tcp_header* response = (struct tcp_header*) packet_buffer;
@@ -364,7 +362,6 @@ tcp_send_receive(int index, void* data, int data_len, void* rec_buf, int rec_buf
         }
 
         // Copy data to rec buf
-        pr_debug("Received %d bytes\n", received_data_len);
         memmove(rec_buf, received_data_start, received_data_len);
 
         // Either case we now have response data somewhere

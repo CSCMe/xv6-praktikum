@@ -250,10 +250,9 @@ virtio_net_init(void)
 
     memmove((void *)net_card.mac_addr, (void *)config.mac, MAC_ADDR_SIZE);
     // We have a mac address!
-    pr_debug("Our ");
+    pr_debug("Our MAC address is ");
     print_mac_addr(net_card.mac_addr);
-    // Config reading done
-    pr_debug("status:%p\n", config.status);
+    pr_debug("\n");
 
     // Expose all receive buffers
     for (int i = 0; i < NUM; i++)

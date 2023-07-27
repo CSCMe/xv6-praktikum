@@ -48,12 +48,9 @@ void arp_table_insert(uint8 ip_addr[], uint8 mac_addr[]) {
 }
 
 void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
-  uint8 cached = 0;
-
   // Check if the ARP table has the mac address cached
   if (arp_table_lookup(ip_addr, mac_addr)) {
-    cached = 1;
-    goto log_result;
+    return;
   }
 
   struct arp_packet arp;
@@ -83,18 +80,16 @@ void get_mac_for_ip(uint8 mac_addr[], uint8 ip_addr[]) {
 
   send_ethernet_packet(arp.mac_dest, ETHERNET_TYPE_ARP, (void *)&arp, sizeof(struct arp_packet));
 
-  wait_for_response(token);
+  wait_for_response(token, 1);
 
   memmove(mac_addr, arp_response.mac_src, MAC_ADDR_SIZE);
 
   // Store the result in the ARP table so we don't have to look it up again
   arp_table_insert(ip_addr, mac_addr);
 
-log_result:
   pr_debug("resolved ");
   print_ip(ip_addr);
   pr_debug(" to ");
   print_mac_addr(mac_addr);
-  if (cached) pr_debug(" (cached)");
   pr_debug("\n");
 }

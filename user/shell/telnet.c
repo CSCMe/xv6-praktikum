@@ -4,21 +4,12 @@
 #include "user/shell/shell.h"
 #include "kernel/fcntl.h"
 
-int getcmd(char *buf, int nbuf) {
-  write(2, "# ", 2);
-  memset(buf, 0, nbuf);
-  gets(buf, nbuf);
-  if (buf[0] == 0) // EOF
-    return -1;
-  return 0;
-}
-
 int main(void) {
   static char buf[100];
 
   // Start a tcp server on port 23 (telnet)
   int port   = 23;
-  printf("Listening for telnet connection on port %d...\n", port);
+  printf("Starting telnet server on port %d...\n", port);
   int handle = net_bind(port);
   printf("Established connection\n");
 
@@ -28,9 +19,7 @@ int main(void) {
 
     // Receive a command
     char prompt[] = "$ ";
-    printf("before %d\n", strlen(buf));
     net_send_listen(handle, prompt, sizeof(prompt), buf, sizeof(buf));
-    printf("after %d\n", strlen(buf));
 
     printf("Got command: %s\n", buf);
 
