@@ -280,7 +280,7 @@ send_tcp_packet_wait_for_ack(uint8 connection_id, void* data, uint16 data_length
     // (Don't actually do anything though, if the server doesn't respect our FIN then thats
     // it's own problem)
     if (flags & TCP_FLAGS_FIN && !(response->flags & TCP_FLAGS_FIN))
-        pr_notice("Server did not agree to close connection");
+        pr_notice("Server did not agree to close connection\n");
 
     // Received new data! Yay. Do something?
     if (response->sequence_num == connection->last_sent_ack_num) {
@@ -458,32 +458,31 @@ int tcp_unbind(uint8 connection_handle) {
         // //       --- ACK ----->
 
         // // Now the server is going to send us an FIN packet that we have to acknowledge
-        // connection_identifier id           = {0};
-        // id.protocol                        = CON_TCP;
-        // id.identification.tcp.in_port      = connection->in_port;
-        // id.identification.tcp.partner_port = connection->partner_port;
-        // memmove(&id.identification.tcp.partner_ip_addr, connection->partner_ip_addr, IP_ADDR_SIZE);
+        connection_identifier id           = {0};
+        id.protocol                        = CON_TCP;
+        id.identification.tcp.in_port      = connection->in_port;
+        id.identification.tcp.partner_port = connection->partner_port;
+        memmove(&id.identification.tcp.partner_ip_addr, connection->partner_ip_addr, IP_ADDR_SIZE);
 
-        // send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN, NULL);
+        send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN, NULL);
 
-        // // Wait for the server FIN
-        // void* rec_buf = kalloc_zero();
-        // add_connection_entry(id, rec_buf);
+        // Wait for the server FIN
+        void* rec_buf = kalloc_zero();
+        add_connection_entry(id, rec_buf);
         
-        // uint32 resp_len = wait_for_response(id, (connection_entry_buffer == NULL));
-        // struct tcp_header *response = (struct tcp_header *)rec_buf;
+        uint32 resp_len = wait_for_response(id, 1);
+        struct tcp_header *response = (struct tcp_header *)rec_buf;
 
-        // // Convert endianess of response to something usable
-        // tcp_header_convert_endian(response);
+        // Convert endianess of response to something usable
+        tcp_header_convert_endian(response);
 
-        // if (response->sequence_num == connection->last_sent_ack_num) {
-        //     pr_debug("RESPONding to final fin");
-        //     // Calculate length of new data
-        //     uint32 resp_data_length = resp_len - (response->offset * 4);
+        // Calculate length of new data
+        uint32 resp_data_length = resp_len - (response->offset * 4);
 
-        //     // Send ack
-        //     send_tcp_ack(connection_handle, response->sequence_num, resp_data_length);
-        // }
+        // Send ack
+        send_tcp_ack(connection_handle, response->sequence_num + 1, resp_data_length);
+        
+        kfree(rec_buf);
     }
 
     // Free Table Entry
