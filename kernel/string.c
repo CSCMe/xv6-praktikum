@@ -1,5 +1,21 @@
 #include "types.h"
 
+/**
+ * Convert from big to little endian & reverse
+*/
+void
+memreverse(void* dst, uint n)
+{
+  uint8 copy[n];
+  uint8* byte_dst = (uint8*) dst;
+  for (int i = 0; i < n; i++) {
+    copy[i] = byte_dst[i];
+  }
+  for (int i = 0; i < n; i++) {
+    byte_dst[i] = copy[n - 1 - i];
+  }
+}
+
 void*
 memset(void *dst, int c, uint n)
 {

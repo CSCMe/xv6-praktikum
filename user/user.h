@@ -42,6 +42,10 @@ int printPT(void);
 int futex_init(uint64* futex);
 int futex_wait(uint64* futex, uint64 val);
 int futex_wake(uint64* futex, int num_wake);
+int net_test(void);
+int net_send_listen(uint8 id, void* send_buffer, int send_buffer_length, void* receive_buffer, int receive_buffer_length);
+int net_bind(uint16 port);
+void net_unbind(int id);
 
 // ulib.c
 int stat(const char*, struct stat*);

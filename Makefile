@@ -1,4 +1,5 @@
 K=kernel
+N=$K/net
 U=user
 O=own
 
@@ -28,6 +29,7 @@ OBJS = \
   $K/pipe.o \
   $K/exec.o \
   $K/sysfile.o \
+  $K/sysnet.o \
   $K/kernelvec.o \
   $K/plic.o \
   $K/virtio_disk.o  \
@@ -37,6 +39,14 @@ OBJS = \
   $K/scheduler.o \
   $K/futex.o \
   $K/process_queue.o \
+  $K/virtio_net.o \
+  $N/net.o \
+  $N/ip.o \
+  $N/arp.o \
+  $N/udp.o \
+  $N/dhcp.o \
+  $N/tcp.o \
+  $N/transport.o \
 
 # riscv64-unknown-elf- or riscv64-linux-gnu-
 # perhaps in /opt/riscv/bin
@@ -113,7 +123,7 @@ tags: $(OBJS) _init
 	etags *.S *.c
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/futex.o
-ULIB += $U/user.o $O/umalloc.o $O/bumalloc.o $O/bmalloc.o $U/sutex.o
+ULIB += $U/user.o $O/umalloc.o $O/bumalloc.o $O/bmalloc.o $U/sutex.o $U/shell/shell.o
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
@@ -142,6 +152,7 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 .PRECIOUS: %.o
 
 UPROGS=\
+	$U/_testnet\
 	$U/_cat\
 	$U/_echo\
 	$U/_forktest\
@@ -152,7 +163,6 @@ UPROGS=\
 	$U/_ls\
 	$U/_mkdir\
 	$U/_rm\
-	$U/_sh\
 	$U/_stressfs\
 	$U/_usertests\
 	$U/_grind\
@@ -165,6 +175,9 @@ UPROGS=\
 	$O/_compare_malloc\
 	$O/_test_nmalloc\
 	$O/_test_mmap_file\
+	$U/shell/_sh\
+	$U/shell/_telnet\
+	$U/shell/_telnet_print\
 	shared/tests/_mutex-test\
 #	$U/_futex\
 
@@ -194,9 +207,13 @@ ifndef CPUS
 CPUS := 3
 endif
 
+# QEMU Platform used: https://www.qemu.org/docs/master/system/arm/virt.html
 QEMUOPTS = -machine virt -bios none -kernel $K/kernel -m 128M -smp $(CPUS) -nographic
 QEMUOPTS += -global virtio-mmio.force-legacy=false
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+QEMUOPTS += -netdev user,id=net0,hostfwd=tcp::5555-:23,hostname="boiii"#SLIRP, might need to update later (https://wiki.qemu.org/Documentation/Networking#User_Networking_(SLIRP))
+QEMUOPTS += -device virtio-net-device,netdev=net0,bus=virtio-mmio-bus.1,mac=12:12:12:55:55:57
+QEMUOPTS += -object filter-dump,id=f1,netdev=net0,file=dump.dat
 QEMUOPTS.drive = -drive file=fs.img,if=none,format=raw,id=x0
 
 qemu: $K/kernel fs.img
