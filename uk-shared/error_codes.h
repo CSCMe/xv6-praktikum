@@ -10,13 +10,15 @@ extern "C" {
 #endif
 
 /* Error codes */
-#define EPERM  0x1    // Permission error
-#define EINVAL 0x2    // Invalid input
-#define ENIMPL 0x3    // Not implemented
-#define EEXIST 0x4    // Mapping exists, but we don't want to overwrite
-#define ENOMEM 0x194  // Memory not found/Out of memory
+#define EPERM   0x1    // Permission error
+#define EINVAL  0x2    // Invalid input
+#define ENIMPL  0x3    // Not implemented
+#define EEXIST  0x4    // Mapping exists, but we don't want to overwrite
+#define ENOMEM  0x194  // Memory not found/Out of memory
 #define EACCESS 0x5   // Access Error
 #define EBADF   0x6   // Bad file descriptor
+#define ECIRC   0x7   // Circular wait 
+#define ENOJOIN 0x8 // Thread not joinable
 
 
 #ifdef __cplusplus

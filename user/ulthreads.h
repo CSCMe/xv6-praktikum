@@ -45,6 +45,8 @@ typedef struct {
     void* (*func) (void*);
     void* saved_value;
     void* stack_start;
+    // only one thread can wait for another
+    thread_id subscriber;
     thread_id waitfor;
     thread_id id;
     thread_state state;
@@ -64,7 +66,13 @@ thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size)
 void uthreads_exit();
 
 // Stops execution of current ULT
-void* uthreads_join(thread_id thread_id);
+// retval = NULL if ignore return value of Thread
+// returns 0 on success
+int uthreads_join(thread_id thread_id, void** retval);
+
+// Check if thread is joinable
+// 0 => yes, other => error
+int uthreads_test_joinable(thread_id thread_id);
 
 #ifdef __cplusplus
 }
