@@ -49,17 +49,32 @@ int16 current_index = 0;
 int16 insert_index = 0;
 
 thread_context scheduler_context = {0};
+void* scheduler_stack_start = NULL;
+
+void append_ring(thread_id id) {
+    ringbuffer[insert_index] = id;
+    insert_index++;
+    insert_index = insert_index % MAX_NUM_THREADS;
+}
+
+thread_id pop_ring() {
+    thread_id popped = ringbuffer[current_index];
+    current_index++;
+    current_index = current_index % MAX_NUM_THREADS;
+    return popped;
+}
 
 void uthreads_sched() {
-    while(active_threads > 0) {
+    while(1) {
 
         printf("Scheddy\n");
-        if (ringbuffer[current_index] == -1) {
+        thread_id id = pop_ring();
+        if (id == -1) {
             printf("Threading broke\n");
             exit(0);
         }
 
-        thread* current_thread = threads + ringbuffer[current_index];
+        thread* current_thread = threads + id;
         switch(current_thread->state) {
             case READY:
                 current_thread_id = current_thread->id;
@@ -67,34 +82,72 @@ void uthreads_sched() {
                 thread_switch(&scheduler_context, &current_thread->context);
                 break;
             case WAITING:
-                // Remove from ringbuffer
-                ringbuffer[current_index] = -1;
-                // TODO: Maybe add check for 
-                // Insert into ringbuffer
-                ringbuffer[insert_index] = current_thread->id;
-                insert_index += 1;
-                insert_index = insert_index % MAX_NUM_THREADS;
+                thread waitfor = threads[current_thread->waitfor];
+                // If waitfor not DEAD or INVALID (means its done executing or is invalid)
+                if (!(waitfor.state == DEAD || waitfor.state == INVALID)) {
+                    // Means it's either Ready, Running or Waiting
+                    // Means we gotta wait
+                    // join protects against circular waits
+                    append_ring(current_thread->id);
+                }
+                // Otherwise it's done.
+                // Mark current thread as ready
+                current_thread->state = READY;
+                current_thread->saved_value = waitfor.saved_value;
                 break;
-            case INVALID:
+            default:
+                printf("Scheduling broke. Thread State: %d", current_thread->state);
+                break;
         }
-        if (current_thread->state !=)
-        thread_switch(&scheduler_context, &current_thread->context);
     }
-}
-
-void uthreads_execute() {
-    thread* current_thread = &threads[current_thread_id];
-    current_thread->saved_value = current_thread->func(current_thread->saved_value);
-
-}
-
-void uthreads_exit() {
-    printf("Exit\n");
 }
 
 void uthreads_yield() {
     printf("yield\n");
 }
+
+void uthreads_exit() {
+    printf("Exit\n");
+    active_threads--;
+    thread* current_thread = &threads[current_thread_id];
+    current_thread->state = DEAD;
+    thread_switch(&current_thread->context, &scheduler_context);
+}
+
+void uthreads_execute() {
+    printf("Execute\n");
+    active_threads++;
+    thread* current_thread = &threads[current_thread_id];
+    current_thread->saved_value = current_thread->func(current_thread->saved_value);
+    uthreads_exit();
+}
+
+void* uthreads_join(thread_id id) {
+    if (!(id >= 0 && id < MAX_NUM_THREADS)) {
+        printf("Threading: Invalid join ID\n");
+        return (void*)-1;
+    }
+    thread* current_thread = &threads[current_thread_id];
+    thread* waitfor_thread = &threads[id];
+
+    // Protect against circular waits
+    if (waitfor_thread->state == WAITING && waitfor_thread->waitfor == current_thread_id) {
+        printf("Threading: Circular wait\n");
+        return (void*)-1;
+    }
+
+    // This is an optimization
+    if (waitfor_thread->state == READY) {
+        current_thread->state = WAITING;
+        current_thread->waitfor = id;
+        
+        append_ring(current_thread_id);
+        thread_switch(&current_thread->context, &scheduler_context);
+    }
+
+    return current_thread->saved_value;
+}
+
 
 thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size) {
     // Inits parent if not initted
@@ -102,12 +155,14 @@ thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size)
     if (current_thread_id == -1) {
         parent_thread = &threads[0];
         parent_thread->state = RUNNING;
+        parent_thread->id = 0;
+        parent_thread->stack_start = (void*)-1;
 
         // Actually init scheduler
-        void* scheduler_stack = malloc(PAGE_SIZE);
+        scheduler_stack_start = malloc(PAGE_SIZE);
         scheduler_context.ra = uthreads_sched;
         // Stack grows down so we use highest address as stack
-        scheduler_context.sp = scheduler_stack + PAGE_SIZE;
+        scheduler_context.sp = scheduler_stack_start + PAGE_SIZE;
 
     } else {
         parent_thread = &threads[current_thread_id];
@@ -115,11 +170,10 @@ thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size)
 
     // Get an empty thread from Thread table
     thread* new_thread = NULL;
-    thread_id new_thread_id = -1;
     for (int i = 0; i < MAX_NUM_THREADS; i++) {
         if (threads[i].state == INVALID) {
             new_thread = &threads[i];
-            new_thread_id = i;
+            new_thread->id = i;
             break;
         }
     }
@@ -138,21 +192,26 @@ thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size)
     }
     parent_thread->state = READY;
     new_thread->state = READY;
+
+    
+    append_ring(parent_thread->id);
+    append_ring(new_thread->id);
+    
     thread_switch(&parent_thread->context, &scheduler_context);
     printf("Returning from create\n");
-    return new_thread_id;
+    return new_thread->id;
 }  
 
-void hello() {
-    printf("hi\n");
+int hello(int arg) {
+    printf("hi %d\n", arg);
+    return arg + 5;
 }
 
 int i = 0;
 int main(){
     i++;
-    int64 a = uthreads_create((void * (*)(void*))hello, (void*) (uint64)i, PAGE_SIZE);
-    printf("freedom!: %d\n", a);
-    uthreads_create((void * (*)(void*))hello, (void*) (uint64)i + 5, PAGE_SIZE);
+    uthreads_create((void * (*)(void*))hello, (void*) (uint64)i, PAGE_SIZE);
+    uthreads_yield();
     return 0;
 }
 
@@ -167,8 +226,12 @@ _main()
   // extern int main();
   int code = main();
   active_threads--;
-  while(active_threads != 0) {
-    uthreads_yield();
+  for (int i = 1; i < MAX_NUM_THREADS; i++) {
+    printf("EXIT: Collecting Threads: %d\n", i);
+    uthreads_join(i);
+    // Free new stacks
+    free(threads[i].stack_start);
   }
+  free(scheduler_stack_start);
   exit(code);
 }
