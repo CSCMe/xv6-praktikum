@@ -180,7 +180,7 @@ UPROGS=\
 	$U/shell/_telnet_print\
 	shared/tests/_mutex-test\
 	$U/_ulthreads\
-#	$U/_futex\
+#	$U/_futex
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
