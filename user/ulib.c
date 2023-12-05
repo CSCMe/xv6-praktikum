@@ -5,11 +5,11 @@
 // wrapper so that it's OK if main() does not call exit().
 //
 void
-_main()
+__attribute__((weak)) _main() 
 {
   extern int main();
-  main();
-  exit(0);
+  int code = main();
+  exit(code);
 }
 
 char*
