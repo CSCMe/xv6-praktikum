@@ -54,25 +54,25 @@ typedef struct {
 
 // Moves Thread to scheduler. ä
 // Invokes scheduler
-void uthreads_yield();
+extern void uthreads_yield();
 
 // Moves current thread to scheduler.
 // Creates new thread with stack_size amount of stack memory. 
 // Invokes new thread
-thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size);
+extern thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size);
 
 // Stops execution of current ULT. 
 // Invokes scheduler
-void uthreads_exit();
+extern void uthreads_exit();
 
 // Stops execution of current ULT
 // retval = NULL if ignore return value of Thread
 // returns 0 on success
-int uthreads_join(thread_id thread_id, void** retval);
+extern int uthreads_join(thread_id thread_id, void** retval);
 
 // Check if thread is joinable
 // 0 => yes, other => error
-int uthreads_test_joinable(thread_id thread_id);
+extern int uthreads_test_joinable(thread_id thread_id);
 
 #ifdef __cplusplus
 }

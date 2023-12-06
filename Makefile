@@ -123,7 +123,7 @@ tags: $(OBJS) _init
 	etags *.S *.c
 
 ULIB = $U/ulib.o $U/usys.o $U/printf.o $U/futex.o
-ULIB += $U/user.o $O/umalloc.o $O/bumalloc.o $O/bmalloc.o $U/sutex.o $U/shell/shell.o
+ULIB += $U/user.o $O/umalloc.o $O/bumalloc.o $O/bmalloc.o $U/sutex.o $U/shell/shell.o $U/uthreads.o
 
 _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
@@ -179,8 +179,7 @@ UPROGS=\
 	$U/shell/_telnet\
 	$U/shell/_telnet_print\
 	shared/tests/_mutex-test\
-	$U/_ulthreads\
-#	$U/_futex
+	$U/_ulthreads
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

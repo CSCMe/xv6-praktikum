@@ -5,7 +5,7 @@
 // #define DEBUG_THREADING
                         
 // Context swtich
-__attribute__((naked)) void thread_switch(thread_context* old, thread_context* new) 
+__attribute__((naked)) static void thread_switch(thread_context* old, thread_context* new) 
 {
     asm volatile (
         "sd ra, 0(a0)\n"
@@ -53,13 +53,13 @@ static int16 insert_index = 0;
 static thread_context scheduler_context = {0};
 static void* scheduler_stack_start = NULL;
 
-void append_ring(thread_id id) {
+static void append_ring(thread_id id) {
     ringbuffer[insert_index] = id;
     insert_index++;
     insert_index = insert_index % MAX_NUM_THREADS;
 }
 
-thread_id pop_ring() {
+static thread_id pop_ring() {
     thread_id popped = ringbuffer[current_index];
     ringbuffer[current_index] = -1;
     current_index++;
@@ -67,7 +67,7 @@ thread_id pop_ring() {
     return popped;
 }
 
-void uthreads_sched() {
+static void uthreads_sched() {
     while(1) {
         thread_id id = pop_ring();
         if (id == -1) {
@@ -131,7 +131,7 @@ void uthreads_exit() {
     thread_switch(&current_thread->context, &scheduler_context);
 }
 
-void uthreads_execute() {
+static void uthreads_execute() {
     #ifdef DEBUG_THREADING
     printf("Execute: %d\n", current_thread_id);
     #endif
@@ -283,15 +283,18 @@ _main()
   extern int main();
   int code = main();
   active_threads--;
-  for (int i = 1; i < MAX_NUM_THREADS; i++) {
-    #ifdef DEBUG_THREADING
-    printf("EXIT: Collecting Threads: %d\n", i);
-    #endif
-    uthreads_join(i, NULL);
-    // Free new stacks
-    free(threads[i].stack_start);
+  // Only do all this if necessary, aka threading been invoked
+  if (current_thread_id != -1) {
+    for (int i = 1; i < MAX_NUM_THREADS; i++) {
+        #ifdef DEBUG_THREADING
+        printf("EXIT: Collecting Threads: %d\n", i);
+        #endif
+        uthreads_join(i, NULL);
+        // Free new stacks
+        free(threads[i].stack_start);
+    }
+    // Free scheduler stack
+    free(scheduler_stack_start);
   }
-  // Free scheduler stack
-  free(scheduler_stack_start);
   exit(code);
 }

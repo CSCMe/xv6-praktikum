@@ -1,5 +1,5 @@
 #include "user/user.h"
-#include "user/uthreads.c"
+#include "user/uthreads.h"
 
 
 char buf[1000] = {0};
@@ -31,6 +31,6 @@ void workBuf() {
 
 int main(int argc, char** argv) {
     uthreads_create((void* (*)(void*)) workBuf,NULL, 4096);
-    uthreads_create((void* (*)(void*))addToBuf, NULL, 4096);
+    uthreads_create((void* (*)(void*)) addToBuf, NULL, 4096);
     return 0;
 }
