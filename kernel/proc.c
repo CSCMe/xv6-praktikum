@@ -341,7 +341,7 @@ reparent(struct proc *p)
 // Exit the current process.  Does not return.
 // An exited process remains in the zombie state
 // until its parent calls wait().
-void
+__attribute__((noreturn)) void
 exit(int status)
 {
   struct proc *p = myproc();

@@ -278,23 +278,26 @@ thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size)
 void
 _main() 
 {
-  active_threads++;
-  // Uncomment if needed
-  extern int main();
-  int code = main();
-  active_threads--;
-  // Only do all this if necessary, aka threading been invoked
-  if (current_thread_id != -1) {
-    for (int i = 1; i < MAX_NUM_THREADS; i++) {
-        #ifdef DEBUG_THREADING
-        printf("EXIT: Collecting Threads: %d\n", i);
-        #endif
-        uthreads_join(i, NULL);
-        // Free new stacks
-        free(threads[i].stack_start);
+    #ifdef DEBUG_THREADING
+    printf("Starting Threaded Program\n");
+    #endif
+    active_threads++;
+    // Uncomment if needed
+    extern int main();
+    int code = main();
+    active_threads--;
+    // Only do all this if necessary, aka threading been invoked
+    if (current_thread_id != -1) {
+        for (int i = 1; i < MAX_NUM_THREADS; i++) {
+            #ifdef DEBUG_THREADING
+            printf("EXIT: Collecting Threads: %d\n", i);
+            #endif
+            uthreads_join(i, NULL);
+            // Free new stacks
+            free(threads[i].stack_start);
+        }
+        // Free scheduler stack
+        free(scheduler_stack_start);
     }
-    // Free scheduler stack
-    free(scheduler_stack_start);
-  }
-  exit(code);
+    exit(code);
 }
