@@ -68,7 +68,7 @@ static thread_id pop_ring() {
 }
 
 static void uthreads_sched() {
-    while(1) {
+    while(active_threads > 0) {
         thread_id id = pop_ring();
         if (id == -1) {
             printf("Scheduler: Threading broke. -1 ID\n");
@@ -107,8 +107,13 @@ static void uthreads_sched() {
                 break;
         }
     }
-    // Bei keinen aktiven threads back to the superparent
-    thread_switch(&scheduler_context, &threads[0].context);
+    #ifdef DEBUG_THREADING
+        printf("END SCHEDULER: Freeing Memory\n");
+    #endif
+    // Free memory
+    for (int i = 1; i < MAX_NUM_THREADS; i++) {
+        free(threads[i].stack_start);
+    }
 }
 
 void uthreads_yield() {
@@ -141,15 +146,29 @@ static void uthreads_execute() {
     uthreads_exit();
 }
 
-// Returns 0 if thread is joinable
-int uthreads_test_joinable(thread_id id) {
+/**
+ * @brief Returns a threads state
+ * @return 0: joinable,
+ * @return ENOJOIN: not joinable but not invalid,
+ * @return EINVAL: Invalid thread id
+ * @return EEXIST: Thread invalid
+*/
+int uthreads_state(thread_id id) {
     if (!(id >= 0 && id < MAX_NUM_THREADS)) {
         printf("Joinable: Invalid join ID\n");
+        // Invalid args
         return EINVAL;
     }
     thread* waitfor_thread = &threads[id];
-    // Threads can only be joined by one thread at a time. Invalid threads are not joinable
-    return !(waitfor_thread->subscriber == -1) && waitfor_thread->state != INVALID;
+    if (waitfor_thread->subscriber != -1) {
+        // Thread is not joinable
+        return ENOJOIN;
+    }
+    if (waitfor_thread->state == INVALID) {
+        // Thread does not exit
+        return EEXIST;
+    }
+    return 0;
 }
 
 // Returns 0 on success
@@ -177,7 +196,7 @@ int uthreads_join(thread_id id, void** retval) {
         return ECIRC;
     }
     
-    if (uthreads_test_joinable(id)) {
+    if (uthreads_state(id) == 0) {
         // Thread not joinable. Return immeadiately
         #ifdef DEBUG_THREADING
         printf("Threading: Not joinable: %d\n", id);
@@ -286,18 +305,11 @@ _main()
     extern int main();
     int code = main();
     active_threads--;
-    // Only do all this if necessary, aka threading been invoked
-    if (current_thread_id != -1) {
-        for (int i = 1; i < MAX_NUM_THREADS; i++) {
-            #ifdef DEBUG_THREADING
-            printf("EXIT: Collecting Threads: %d\n", i);
-            #endif
-            uthreads_join(i, NULL);
-            // Free new stacks
-            free(threads[i].stack_start);
-        }
-        // Free scheduler stack
-        free(scheduler_stack_start);
-    }
+    #ifdef DEBUG_THREADING
+        printf("EXIT: Replacing scheduler: %d\n");
+    #endif
+    free(scheduler_stack_start);
+    // There's no need to context switch to or modify scheduler_context.
+    uthreads_sched();
     exit(code);
 }

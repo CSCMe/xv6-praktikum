@@ -70,9 +70,14 @@ extern void uthreads_exit();
 // returns 0 on success
 extern int uthreads_join(thread_id thread_id, void** retval);
 
-// Check if thread is joinable
-// 0 => yes, other => error
-extern int uthreads_test_joinable(thread_id thread_id);
+/**
+ * @brief Returns a threads state
+ * @return 0: joinable,
+ * @return ENOJOIN: not joinable but not invalid,
+ * @return EINVAL: Invalid thread id
+ * @return EEXIST: Thread invalid
+*/
+extern int uthreads_state(thread_id thread_id);
 
 #ifdef __cplusplus
 }
