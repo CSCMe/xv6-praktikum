@@ -144,8 +144,8 @@ $U/_forktest: $U/forktest.o $(ULIB)
 
 $U/_ulthreads: $U/ulthreads.o $U/uthreads.o $(ULIB) 
 	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $^
-	$(OBJDUMP) -S $@ > $*.asm
-	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
+	$(OBJDUMP) -S $@ > $U/ulthreads.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $U/ulthreads.sym
 
 mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 	gcc -Werror -Wall -I. -o mkfs/mkfs mkfs/mkfs.c
