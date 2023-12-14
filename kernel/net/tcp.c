@@ -263,6 +263,8 @@ int32 send_tcp_packet_wait_for_ack(
   if (flags & TCP_FLAGS_FIN && !(response->flags & TCP_FLAGS_FIN))
     pr_notice("Server did not agree to close connection\n");
 
+  if(response->flags & TCP_FLAGS_FIN)
+    connection->last_sent_ack_num++;
   // Received new data! Yay. Do something?
   if (response->sequence_num == connection->last_sent_ack_num) {
     // Calculate length of new data
@@ -437,9 +439,10 @@ int tcp_unbind(uint8 connection_handle) {
     id.identification.tcp.partner_port = connection->partner_port;
     memmove(&id.identification.tcp.partner_ip_addr, connection->partner_ip_addr, IP_ADDR_SIZE);
 
+    // Send TCP-Fin and wait for its ACK
     send_tcp_packet_wait_for_ack(connection_handle, NULL, 0, TCP_FLAGS_FIN, NULL);
 
-    // Wait for the server FIN
+    // Wait for the server FIN. For reasons, we'll miss FIN/ACK 1 but we'll catch its retransmission
     void *rec_buf = kalloc_zero();
     add_connection_entry(id, rec_buf);
 
@@ -452,8 +455,8 @@ int tcp_unbind(uint8 connection_handle) {
     // Calculate length of new data
     uint32 resp_data_length = resp_len - (response->offset * 4);
 
-    // Send ack
-    send_tcp_ack(connection_handle, response->sequence_num + 1, resp_data_length);
+    // Send ack for received FIN/ACK
+    send_tcp_ack(connection_handle, response->sequence_num, resp_data_length + (response->flags & TCP_FLAGS_FIN ? 1: 0));
 
     kfree(rec_buf);
   }
