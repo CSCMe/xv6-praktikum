@@ -13,7 +13,7 @@
  * Goes up the structure to update free flags
  * uHeader: previously updated Header
 */
-void updateFreeFlags(Header* uHeader, Header* anchor){
+__attribute__((hot)) void updateFreeFlags(Header* uHeader, Header* anchor) {
     #ifdef DEBUG_BDMALLOC
     printf("Start flag update\n");
     #endif
@@ -45,7 +45,7 @@ void updateFreeFlags(Header* uHeader, Header* anchor){
     }
 }
 
-void bu_merge(Header* toMerge, Header* anchor) {
+__attribute__((hot)) void bu_merge(Header* toMerge, Header* anchor) {
     // Is the entire region free?
     #ifdef DEBUG_BDFREE
         printf("BDFREE-Merging: ");
@@ -74,7 +74,7 @@ void bu_merge(Header* toMerge, Header* anchor) {
  * Frees memory allocated with BDMALLOC
  * Merges sides if both are free
 */
-void bufree(void* address, Header* anchor, Header* base) {
+__attribute__((hot)) void bufree(void* address, Header* anchor, Header* base) {
     // Check the left side first
     // Header potentially responsible for the address
     Header* respHeader = ((Header*) address) - 1;
@@ -191,7 +191,7 @@ Header* bu_fix(uint32 highestLevel, Header* anchor) {
  * Assumption:
  * We always have more free blocks than nBlock
 */
-Header* traverseBestFit(uint32 requiredLevel, dir* rDir, Header* anchor) {
+__attribute__((hot)) Header* traverseBestFit(uint32 requiredLevel, dir* rDir, Header* anchor) {
     // Travel down the tree
     // We need to find a region of the correct size
     uint32 nextBestLevel = requiredLevel;
@@ -276,7 +276,7 @@ Header* traverseBestFit(uint32 requiredLevel, dir* rDir, Header* anchor) {
 /**
  * Buddy malloc
 */
-void* bumalloc(uint32 requiredLevel, Header* anchor) {
+__attribute__((hot, malloc (bufree))) void* bumalloc(uint32 requiredLevel, Header* anchor) {
 
     // Now we definitely have a region that's big enough for us.
     // Just gotta find it somewhere.
