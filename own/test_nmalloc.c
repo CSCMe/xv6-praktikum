@@ -17,7 +17,6 @@ void main(int argc, char ** argv) {
   setup_malloc();
   Header* needed = malloc(1);
   BuddyManager* manager = get_responsible_manager(needed);
-  free(needed);
 
   int freeHeaders = 0;
   // print region
@@ -34,7 +33,7 @@ void main(int argc, char ** argv) {
   }
   printf("Free headers: %d\n", freeHeaders);
   printf("Manager: start:%p anch:%p end:%p, anch+freeHeaders\n",manager->base, manager->anchor, manager->end, manager->anchor + freeHeaders);
-
+    free(needed);
 
   struct block a[100] = {0};
   for (int i = 0; i < 100; i++) {
@@ -93,10 +92,10 @@ void main(int argc, char ** argv) {
   DEBUGHEADER(manager->anchor);
   printf("BeforeFree\n");
   free(newRegion);
+  BuddyManager* manager4 = get_responsible_manager(test);
   free(test);
   free(test2);
   printf("AfterFree\n");
   DEBUGHEADER(manager->anchor);
-  manager = get_responsible_manager(test);
-  DEBUGHEADER(manager->anchor);
+  DEBUGHEADER(manager4->anchor);
 }

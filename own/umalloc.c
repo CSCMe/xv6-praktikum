@@ -18,7 +18,7 @@ struct __managerList managerList = {.start = NULL, .length = 0};
 /**
  * Returns a pointer to manager the address resides in
 */
-__attribute__((hot)) BuddyManager* get_responsible_manager(void* addr) {
+__attribute__((hot, pure)) BuddyManager* get_responsible_manager(void* addr) {
     // Code to go through different managers and return the one with the matching address
     // Required for free
     #ifdef DEBUG_MANAGERS
@@ -200,7 +200,7 @@ __attribute__((hot)) BuddyManager* get_and_init_manager(uint32 requiredLevel) {
  * Returns integer with only first set bit
  * Stolen from https://stackoverflow.com/a/3065433
 */
-inline uint32 only_fs(uint32 num) {
+const inline uint32 only_fs(uint32 num) {
     uint32 l = 0;
     while (num >>= 1) { ++l; }
     return 1 << l;

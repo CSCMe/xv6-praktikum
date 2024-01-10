@@ -23,7 +23,7 @@ void init_mmap() {
 /**
  * Hash function for shared_mappings_map
 */
-uint64 hash_function(uint64 key) {
+const uint64 hash_function(uint64 key) {
     key ^= (key >> 33);
     key *= 0xff51afd7ed558ccd;
     key ^= (key >> 33);

@@ -72,10 +72,10 @@ typedef struct __buddy_manager {
 } BuddyManager;
 
 void bufree(void* pointer, Header* anchor, Header* base);
-void* bumalloc(uint32, Header* anchor);
+void* bumalloc(uint32, Header* anchor) __attribute__((malloc (bufree)));
 Header* bu_fix(uint32 highestLevel, Header* anchor);
 void bu_merge(Header* from, Header* to);
-BuddyManager* get_responsible_manager(void* pointer);
+BuddyManager* get_responsible_manager(void* pointer) __attribute__((hot, pure));
 
 // Prints all the information needed to debug a particular header
 #define DEBUGHEADER(header) printf("ptr:%p lvl:%b, fl:%b, fr:%b, dir:%b, allocDirs:%b\n", (header), (header)->level, (header)->freeLeft, (header)->freeRight, (header)->dirToParent, (header)->allocDirs)
