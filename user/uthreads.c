@@ -295,7 +295,7 @@ thread_id uthreads_create(void* func_pointer (void*), void* arg, int stack_size)
 // Wrapper so it's ok if main doesn't call exit
 // Modified to lead back to scheduler unless everyone is done
 void
-_main() 
+start() 
 {
     #ifdef DEBUG_THREADING
     printf("Starting Threaded Program\n");
@@ -306,7 +306,7 @@ _main()
     int code = main();
     active_threads--;
     #ifdef DEBUG_THREADING
-        printf("EXIT: Replacing scheduler: %d\n");
+        printf("EXIT: Replacing scheduler: %d\n", code);
     #endif
     free(scheduler_stack_start);
     // There's no need to context switch to or modify scheduler_context.
