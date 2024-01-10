@@ -26,19 +26,10 @@ kinit()
   freerange(end, (void*)PHYSTOP);
 }
 
-void
-freerange(void *pa_start, void *pa_end)
-{
-  char *p;
-  p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
-}
-
 /**
  * Uses uint64 instead of chars for a 10x speedup
 */
-void
+__attribute__((hot)) void
 fast_page_memset(uint64* start, uint64 content) 
 {
   for (int i = 0; i < PGSIZE / sizeof(uint64); i++) {
@@ -46,6 +37,25 @@ fast_page_memset(uint64* start, uint64 content)
   }
 }
 
+
+/**
+ * Takes memory range and inserts it into the freelist by calling kfree
+*/
+void
+freerange(void *pa_start, void *pa_end)
+{
+  char *p;
+  p = (char*)PGROUNDUP((uint64)pa_start);
+  acquire(&kmem.lock);
+
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
+    fast_page_memset((uint64*)p, 0x0101010101010101);
+    struct run *r = (struct run*) p;
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+  }
+  release(&kmem.lock);
+}
 
 // Free the page of physical memory pointed at by pa,
 // which normally should have been returned by a
@@ -73,7 +83,7 @@ kfree(void *pa)
 // Allocate one 4096-byte page of physical memory.
 // Returns a pointer that the kernel can use.
 // Returns 0 if the memory cannot be allocated.
-void *
+__attribute__((malloc (kfree))) void *
 kalloc(void)
 {
   struct run *r;
@@ -89,7 +99,7 @@ kalloc(void)
   return (void*)r;
 }
 
-void*
+__attribute__((malloc (kfree))) void*
 kalloc_zero(void)
 {
   struct run *r;
